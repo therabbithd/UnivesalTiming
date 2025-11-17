@@ -1,0 +1,15 @@
+@use 'sass:color';
+
+:host {
+  min-height: 100vh;
+  display: block;
+  margin: 0;
+  background-color: #020617;
+  color: #f8fafc;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+

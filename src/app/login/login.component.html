@@ -1,0 +1,57 @@
+<section class="login">
+  <header class="login__header">
+    <p class="login__eyebrow">Universal Timing</p>
+    <h1>Inicia sesión</h1>
+    <p class="login__subtitle">
+      Accede a tu cuenta para gestionar tus eventos deportivos y paneles personalizados.
+    </p>
+  </header>
+
+  <form class="login__form" [formGroup]="loginForm" (ngSubmit)="submit()" novalidate>
+    <!-- Mensaje de éxito -->
+    <div class="message message--success" *ngIf="successMessage()">
+      <p>{{ successMessage() }}</p>
+    </div>
+
+    <!-- Mensaje de error -->
+    <div class="message message--error" *ngIf="errorMessage()">
+      <p>{{ errorMessage() }}</p>
+    </div>
+
+    <label class="field">
+      <span>Correo electrónico</span>
+      <input 
+        type="email" 
+        placeholder="correo@ejemplo.com" 
+        formControlName="email"
+        [disabled]="isLoading()" 
+      />
+      <small *ngIf="email?.invalid && (email?.touched || isSubmitted())">
+        Introduce un correo electrónico válido.
+      </small>
+    </label>
+
+    <label class="field">
+      <span>Contraseña</span>
+      <input 
+        type="password" 
+        placeholder="Tu contraseña" 
+        formControlName="password"
+        [disabled]="isLoading()" 
+      />
+      <small *ngIf="password?.invalid && (password?.touched || isSubmitted())">
+        La contraseña es requerida.
+      </small>
+    </label>
+
+    <button type="submit" [disabled]="isLoading()">
+      <span *ngIf="!isLoading()">Iniciar sesión</span>
+      <span *ngIf="isLoading()">Iniciando sesión...</span>
+    </button>
+  </form>
+
+  <footer class="login__footer">
+    ¿No tienes una cuenta? <a routerLink="/register">Regístrate</a>
+  </footer>
+</section>
+

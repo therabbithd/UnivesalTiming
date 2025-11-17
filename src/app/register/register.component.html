@@ -1,0 +1,97 @@
+<section class="register">
+  <header class="register__header">
+    <p class="register__eyebrow">Universal Timing</p>
+    <h1>Crea tu cuenta</h1>
+    <p class="register__subtitle">
+      Rellena el formulario para acceder a paneles personalizados y gestionar tus eventos deportivos.
+    </p>
+  </header>
+
+  <form class="register__form" [formGroup]="registrationForm" (ngSubmit)="submit()" novalidate>
+    <!-- Mensaje de éxito -->
+    <div class="message message--success" *ngIf="successMessage()">
+      <p>{{ successMessage() }}</p>
+    </div>
+
+    <!-- Mensaje de error -->
+    <div class="message message--error" *ngIf="errorMessage()">
+      <p>{{ errorMessage() }}</p>
+    </div>
+
+    <label class="field">
+      <span>Nombre completo</span>
+      <input 
+        type="text" 
+        placeholder="Ej. María López" 
+        formControlName="fullName"
+        [disabled]="isLoading()" 
+      />
+      <small *ngIf="fullName?.invalid && (fullName?.touched || isSubmitted())">
+        El nombre debe tener al menos 3 caracteres.
+      </small>
+    </label>
+
+    <label class="field">
+      <span>Correo electrónico</span>
+      <input 
+        type="email" 
+        placeholder="correo@ejemplo.com" 
+        formControlName="email"
+        [disabled]="isLoading()" 
+      />
+      <small *ngIf="email?.invalid && (email?.touched || isSubmitted())">
+        Introduce un correo electrónico válido.
+      </small>
+    </label>
+
+    <div class="field field--split">
+      <label>
+        <span>Contraseña</span>
+        <input 
+          type="password" 
+          placeholder="Mínimo 8 caracteres" 
+          formControlName="password"
+          [disabled]="isLoading()" 
+        />
+        <small *ngIf="password?.invalid && (password?.touched || isSubmitted())">
+          La contraseña debe tener al menos 8 caracteres.
+        </small>
+      </label>
+      <label>
+        <span>Confirmar contraseña</span>
+        <input 
+          type="password" 
+          placeholder="Repite la contraseña" 
+          formControlName="confirmPassword"
+          [disabled]="isLoading()" 
+        />
+        <small *ngIf="passwordMismatch()">Las contraseñas no coinciden.</small>
+      </label>
+    </div>
+
+    <label class="terms">
+      <input 
+        type="checkbox" 
+        formControlName="acceptTerms"
+        [disabled]="isLoading()" 
+      />
+      <span>Acepto los términos y condiciones.</span>
+    </label>
+    <small
+      class="terms__error"
+      *ngIf="registrationForm.get('acceptTerms')?.invalid && (registrationForm.get('acceptTerms')?.touched || isSubmitted())"
+    >
+      Debes aceptar los términos para continuar.
+    </small>
+
+    <button type="submit" [disabled]="isLoading()">
+      <span *ngIf="!isLoading()">Crear cuenta</span>
+      <span *ngIf="isLoading()">Creando cuenta...</span>
+    </button>
+  </form>
+
+  <footer class="register__footer">
+    ¿Ya tienes una cuenta? <a routerLink="/login">Inicia sesión</a>
+  </footer>
+</section>
+

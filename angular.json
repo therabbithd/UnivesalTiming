@@ -33,7 +33,7 @@
               "src/styles.scss",
               "node_modules/@syncfusion/ej2-base/styles/material.css",
               "node_modules/@syncfusion/ej2-layouts/styles/material.css",
-              "node_modules/@syncfusion/ej2-grids/styles/material.css",
+              "node_modules/@syncfusion/ej2-grids/styles/material.css"
             ],
             "scripts": []
           },
@@ -100,5 +100,8 @@
         }
       }
     }
+  },
+  "cli": {
+    "analytics": false
   }
 }

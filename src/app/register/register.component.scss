@@ -2,11 +2,14 @@
   display: block;
   min-height: 100vh;
   padding: 2rem;
+  margin: 0;
   background: radial-gradient(circle at top, #7c3aed 0, #111827 40%, #0b1120 100%);
-  color: #f3f4f6;
+  color: #ececec;
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
-
+body {
+  margin: 0,0,0,0;
+}
 .register {
   max-width: 480px;
   margin: 0 auto;

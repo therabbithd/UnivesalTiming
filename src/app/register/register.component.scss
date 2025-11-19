@@ -7,9 +7,11 @@
   color: #ececec;
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
+
 body {
-  margin: 0,0,0,0;
+  margin: 0;
 }
+
 .register {
   max-width: 480px;
   margin: 0 auto;
@@ -20,6 +22,20 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  position: relative;
+  z-index: 1;
+}
+
+/* Sombra con gradiente circular */
+.register::before {
+  content: "";
+  position: absolute;
+  inset: -1rem;
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.4) 0%, rgba(168, 139, 250, 0.2) 30%, transparent 70%);
+  filter: blur(40px);
+  border-radius: 1.5rem;
+  z-index: -1;
+  opacity: 0.8;
 }
 
 .register__header h1 {
@@ -166,4 +182,3 @@ button:disabled {
     padding: 2rem;
   }
 }
-

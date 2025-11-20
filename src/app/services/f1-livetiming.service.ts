@@ -13,7 +13,9 @@ import {
   providedIn: 'root'
 })
 export class F1LiveTimingService {
-  private readonly baseUrl = 'https://livetiming.formula1.com/static';
+  // CAMBIO CLAVE 1: Usar el prefijo del proxy y quitar el dominio externo
+  // El proxy se encargará de mapear "/f1-api" a "https://livetiming.formula1.com"
+  private readonly baseUrl = '/f1-api/static'; 
 
   constructor(private http: HttpClient) {}
 
@@ -21,6 +23,7 @@ export class F1LiveTimingService {
    * Obtiene la lista de años disponibles en la API
    */
   getAvailableYears(): Observable<F1IndexResponse> {
+    // CAMBIO CLAVE 2: La ruta ahora es: /f1-api/static/Index.json
     return this.http.get<F1IndexResponse>(`${this.baseUrl}/Index.json`);
   }
 
@@ -29,6 +32,7 @@ export class F1LiveTimingService {
    * @param year - Año de la temporada (ej: 2025)
    */
   getSeason(year: number): Observable<F1SeasonResponse> {
+    // CAMBIO CLAVE 3: La ruta ahora es: /f1-api/static/{year}/Index.json
     return this.http.get<F1SeasonResponse>(`${this.baseUrl}/${year}/Index.json`);
   }
 
@@ -37,6 +41,7 @@ export class F1LiveTimingService {
    * @param sessionPath - Ruta de la sesión (ej: "2024/2024-06-23_Spanish_Grand_Prix/2024-06-23_Race/")
    */
   getSessionIndex(sessionPath: string): Observable<F1SessionIndex> {
+    // La ruta ahora es: /f1-api/static/{sessionPath}Index.json
     return this.http.get<F1SessionIndex>(
       `${this.baseUrl}/${sessionPath}Index.json`
     );
@@ -48,6 +53,7 @@ export class F1LiveTimingService {
    * @param feedPath - Ruta del feed (ej: "SessionInfo.json")
    */
   getSessionData<T = any>(sessionPath: string, feedPath: string): Observable<T> {
+    // La ruta ahora es: /f1-api/static/{sessionPath}{feedPath}
     return this.http.get<T>(`${this.baseUrl}/${sessionPath}${feedPath}`);
   }
 
@@ -57,6 +63,7 @@ export class F1LiveTimingService {
    * @param streamPath - Ruta del stream (ej: "SessionInfo.jsonStream")
    */
   getSessionStream<T = any>(sessionPath: string, streamPath: string): Observable<T> {
+    // La ruta ahora es: /f1-api/static/{sessionPath}{streamPath}
     return this.http.get<T>(`${this.baseUrl}/${sessionPath}${streamPath}`);
   }
 }

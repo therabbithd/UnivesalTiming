@@ -65,4 +65,14 @@ export interface F1Year {
     type: string;
     count: number;
   }
-  
+  export interface DriverTiming {
+    position: number;
+    driverCode: string; // Ej: 'VER', 'HAM'
+    driverName: string; // Ej: 'Verstappen', 'Hamilton'
+    lapNumber: number;
+    lastLapTime: string; // Ej: "1:20.555"
+    gapToLeader: string; // Ej: "+1.200"
+    gapToAhead: string; // Ej: "Gap" o "+0.500"
+    isPit: boolean; // Si está en el pit lane
+    statusColor: 'personal-best' | 'session-best' | 'normal' | 'none'; // Para resaltar tiempos
+  }

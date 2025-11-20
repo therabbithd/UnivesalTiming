@@ -1,7 +1,7 @@
 import { Routes } from '@angular/router';
 import { RegisterComponent } from './register/register.component';
 import { LoginComponent } from './login/login.component';
-import { F1DashboardComponent } from './f1-dashboard/f1-dashboard.component';
+import { TimingTableComponent } from './timing-table/timing-table.component';
 
 export const routes: Routes = [
   {
@@ -21,7 +21,7 @@ export const routes: Routes = [
   },
   {
     path: 'dashboard',
-    component: F1DashboardComponent,
+    component: TimingTableComponent,
     title: 'F1 Dashboard | Universal Timing',
   },
   {

@@ -1,0 +1,50 @@
+<mat-card>
+    <mat-card-header>
+      <mat-card-title>🏎️ Live Timing Tower</mat-card-title>
+      <mat-card-subtitle>Datos actualizados cada 1 segundo (Simulación)</mat-card-subtitle>
+    </mat-card-header>
+  
+    <table mat-table 
+           [dataSource]="(timingData$ | async) ?? []" 
+           class="timing-table mat-elevation-z8">
+      
+      <ng-container matColumnDef="position">
+        <th mat-header-cell *matHeaderCellDef>POS</th>
+        <td mat-cell *matCellDef="let driver">{{ driver.position }}</td>
+      </ng-container>
+  
+      <ng-container matColumnDef="driverCode">
+        <th mat-header-cell *matHeaderCellDef>DRV</th>
+        <td mat-cell *matCellDef="let driver">{{ driver.driverCode }}</td>
+      </ng-container>
+      
+      <ng-container matColumnDef="lapNumber">
+        <th mat-header-cell *matHeaderCellDef>LAP</th>
+        <td mat-cell *matCellDef="let driver">{{ driver.lapNumber }}</td>
+      </ng-container>
+  
+      <ng-container matColumnDef="lastLapTime">
+        <th mat-header-cell *matHeaderCellDef>TIME</th>
+        <td mat-cell *matCellDef="let driver">
+          <strong>{{ driver.lastLapTime }}</strong>
+        </td>
+      </ng-container>
+  
+      <ng-container matColumnDef="gapToLeader">
+        <th mat-header-cell *matHeaderCellDef>GAP LDR</th>
+        <td mat-cell *matCellDef="let driver">{{ driver.gapToLeader }}</td>
+      </ng-container>
+  
+      <ng-container matColumnDef="gapToAhead">
+        <th mat-header-cell *matHeaderCellDef>GAP AHD</th>
+        <td mat-cell *matCellDef="let driver">{{ driver.gapToAhead }}</td>
+      </ng-container>
+  
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      
+      <tr mat-row 
+          *matRowDef="let row; columns: displayedColumns;" 
+          [ngClass]="getRowClass(row)">
+      </tr>
+    </table>
+  </mat-card>

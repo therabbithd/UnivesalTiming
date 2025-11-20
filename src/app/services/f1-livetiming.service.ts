@@ -2,68 +2,60 @@
 
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, timer, switchMap, of, catchError } from 'rxjs';
 import { 
   F1IndexResponse, 
   F1SeasonResponse, 
   F1SessionIndex 
 } from '../models/f1-livetiming.model';
+import { DriverTiming } from '../models/f1-livetiming.model'; // Importamos el nuevo modelo
 
 @Injectable({
   providedIn: 'root'
 })
 export class F1LiveTimingService {
-  // CAMBIO CLAVE 1: Usar el prefijo del proxy y quitar el dominio externo
-  // El proxy se encargará de mapear "/f1-api" a "https://livetiming.formula1.com"
+  
+  // Usamos el prefijo del proxy definido en proxy.conf.json
   private readonly baseUrl = '/f1-api/static'; 
 
   constructor(private http: HttpClient) {}
 
-  /**
-   * Obtiene la lista de años disponibles en la API
-   */
+  // --- MÉTODOS EXISTENTES (Mantener por si los necesitas) ---
+
   getAvailableYears(): Observable<F1IndexResponse> {
-    // CAMBIO CLAVE 2: La ruta ahora es: /f1-api/static/Index.json
     return this.http.get<F1IndexResponse>(`${this.baseUrl}/Index.json`);
   }
 
-  /**
-   * Obtiene todos los Grandes Premios y sesiones de una temporada
-   * @param year - Año de la temporada (ej: 2025)
-   */
   getSeason(year: number): Observable<F1SeasonResponse> {
-    // CAMBIO CLAVE 3: La ruta ahora es: /f1-api/static/{year}/Index.json
     return this.http.get<F1SeasonResponse>(`${this.baseUrl}/${year}/Index.json`);
   }
 
-  /**
-   * Obtiene el índice de feeds disponibles para una sesión específica
-   * @param sessionPath - Ruta de la sesión (ej: "2024/2024-06-23_Spanish_Grand_Prix/2024-06-23_Race/")
-   */
-  getSessionIndex(sessionPath: string): Observable<F1SessionIndex> {
-    // La ruta ahora es: /f1-api/static/{sessionPath}Index.json
-    return this.http.get<F1SessionIndex>(
-      `${this.baseUrl}/${sessionPath}Index.json`
-    );
-  }
-
-  /**
-   * Obtiene los datos de un feed específico de una sesión
-   * @param sessionPath - Ruta de la sesión
-   * @param feedPath - Ruta del feed (ej: "SessionInfo.json")
-   */
   getSessionData<T = any>(sessionPath: string, feedPath: string): Observable<T> {
-    // La ruta ahora es: /f1-api/static/{sessionPath}{feedPath}
     return this.http.get<T>(`${this.baseUrl}/${sessionPath}${feedPath}`);
   }
 
+  // --- LIVE TIMING SIMULADO ---
+
   /**
-   * Obtiene los datos del stream de un feed
-   * @param sessionPath - Ruta de la sesión
-   * @param streamPath - Ruta del stream (ej: "SessionInfo.jsonStream")
+   * 💡 Simulación de Live Timing con HTTP Polling. 
+   * En un proyecto real, esto se reemplazaría por una conexión a WebSockets/SignalR.
+   * @param sessionPath Ruta de la sesión (ej: "2024/2024-06-23_Spanish_Grand_Prix/2024-06-23_Race/")
    */
-  getSessionStream<T = any>(sessionPath: string, streamPath: string): Observable<T> {
-    // La ruta ahora es: /f1-api/static/{sessionPath}{streamPath}
-    return this.http.get<T>(`${this.baseUrl}/${sessionPath}${streamPath}`);
+  getLiveTimingData(sessionPath: string): Observable<DriverTiming[]> {
+    const streamPath = 'TimingData.jsonStream'; // Asumiendo un feed de timing
+
+    // Usamos el timer de RxJS para hacer una petición cada 1000ms (1 segundo)
+    return timer(0, 1000).pipe(
+      switchMap(() => {
+       
+        return this.getSessionData<DriverTiming[]>(sessionPath, streamPath);
+      }),
+      catchError(error => {
+        console.error('Error fetching live timing data:', error);
+        return of([]); // Devolver un array vacío en caso de error
+      })
+    );
   }
+
+  
 }

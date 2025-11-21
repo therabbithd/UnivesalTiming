@@ -1,5 +1,3 @@
-// src/app/services/f1-livetiming.service.ts
-
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, timer, switchMap, of, catchError, startWith, scan } from 'rxjs';
@@ -13,6 +11,7 @@ export class F1LiveTimingService {
 
   private readonly baseUrl = '/f1-api/static';
   private driverInfoMap = new Map<string, any>();
+  private hasLoggedDebug = false;
 
   constructor(private http: HttpClient) { }
 
@@ -21,6 +20,61 @@ export class F1LiveTimingService {
   getSeason(year: number) { /* ... */ }
   getSessionData<T = any>(sessionPath: string, feedPath: string): Observable<T> {
     return this.http.get<T>(`${this.baseUrl}/${sessionPath}${feedPath}`);
+  }
+
+  /**
+   * Obtiene el path de la última sesión disponible en 2025
+   */
+  getLatestSessionPath(): Observable<string> {
+    // const t = new Date().getTime();
+    return this.http.get<any>(`${this.baseUrl}/2025/Index.json`).pipe(
+      map(response => {
+        if (!response || !response.Meetings || response.Meetings.length === 0) {
+          console.error('Respuesta Index.json inválida:', response);
+          throw new Error('No se encontraron meetings en 2025');
+        }
+
+        console.log(`Encontrados ${response.Meetings.length} meetings.`);
+
+        // Buscar el último meeting que tenga sesiones
+        const meetings = response.Meetings;
+        let lastSessionPath = '';
+
+        // Iterar desde el final para encontrar el más reciente
+        // Recorremos los meetings de atrás hacia adelante
+        for (let i = meetings.length - 1; i >= 0; i--) {
+          const meeting = meetings[i];
+          if (meeting.Sessions && meeting.Sessions.length > 0) {
+            // Recorremos las sesiones de este meeting de atrás hacia adelante
+            // para encontrar la última que tenga un Path válido
+            for (let j = meeting.Sessions.length - 1; j >= 0; j--) {
+              const session = meeting.Sessions[j];
+              if (session.Path) {
+                lastSessionPath = session.Path;
+                console.log(`Última sesión disponible encontrada: ${meeting.Name} - ${session.Name}`, lastSessionPath);
+                break;
+              }
+            }
+          }
+
+          // Si ya encontramos una sesión, terminamos la búsqueda
+          if (lastSessionPath) {
+            break;
+          }
+        }
+
+        if (!lastSessionPath) {
+          throw new Error('No se encontraron sesiones disponibles');
+        }
+
+        return lastSessionPath;
+      }),
+      catchError(err => {
+        console.error('Error obteniendo la última sesión. Detalles:', err);
+        // Fallback a la última sesión conocida (Pre-Season Testing Day 3)
+        return of('2025/2025-02-28_Pre-Season_Testing/2025-02-28_Day_3/');
+      })
+    );
   }
 
   /**
@@ -126,7 +180,21 @@ export class F1LiveTimingService {
 
     // Convertimos a array y ordenamos por posición
     const result = Array.from(driverMap.values());
-    result.sort((a, b) => (a.position || 999) - (b.position || 999));
+    result.sort((a, b) => {
+      // Asegurar que undefined se vaya al final, pero permitir 0 si es válido
+      const posA = (a.position !== undefined && a.position !== null) ? a.position : 999;
+      const posB = (b.position !== undefined && b.position !== null) ? b.position : 999;
+      return posA - posB;
+    });
+
+    // DEBUG: Loggear los primeros 5 para ver qué está pasando
+    if (result.length > 0) {
+      console.log('Top 5 drivers:', result.slice(0, 5).map(d => ({
+        pos: d.position,
+        code: d.driverCode,
+        name: d.driverName
+      })));
+    }
 
     return result;
   }
@@ -137,9 +205,15 @@ export class F1LiveTimingService {
   private parseTimingStream(raw: string): Partial<DriverTiming>[] {
     const updates: Partial<DriverTiming>[] = [];
 
-    // Dividir por timestamps (formato: HH:MM:SS.mmm)
-    const timestampRegex = /(\d{2}:\d{2}:\d{2}\.\d{3})/g;
+    // Dividir por timestamps (formato: HH:MM:SS.mmm, aceptando 1 o 2 dígitos para la hora)
+    const timestampRegex = /(\d{1,2}:\d{2}:\d{2}\.\d{3})/g;
     const parts = raw.split(timestampRegex);
+
+    if (!this.hasLoggedDebug && parts.length > 0) {
+      console.log('--- DEBUG START ---');
+      console.log('Raw Stream Start (first 200 chars):', raw.substring(0, 200));
+      console.log('Split parts count:', parts.length);
+    }
 
     // Procesar cada bloque timestamp + JSON
     for (let i = 1; i < parts.length; i += 2) {
@@ -151,6 +225,14 @@ export class F1LiveTimingService {
       try {
         // Intentar parsear el JSON completo
         const data = JSON.parse(jsonPart);
+
+        if (!this.hasLoggedDebug && data.Lines) {
+          // Buscar si hay alguien con Position 1 o Line 1
+          const leader = Object.values(data.Lines).find((d: any) => d.Position === '1' || d.Line === 1);
+          if (leader) {
+            console.log('Found potential leader in stream:', leader);
+          }
+        }
 
         if (data.Lines) {
           // Cada entrada en "Lines" es una actualización de un piloto
@@ -185,6 +267,11 @@ export class F1LiveTimingService {
       }
     }
 
+    if (!this.hasLoggedDebug && parts.length > 0) {
+      this.hasLoggedDebug = true;
+      console.log('--- DEBUG END ---');
+    }
+
     return updates;
   }
 
@@ -192,14 +279,17 @@ export class F1LiveTimingService {
    * Mapea los datos del JSON de F1 al modelo DriverTiming
    * Estructura real: LastLapTime.Value, IntervalToPositionAhead.Value, etc.
    */
-  private mapF1DataToDriverTiming(racingNumber: string, f1Data: any): Partial<DriverTiming> | null {
+  private mapF1DataToDriverTiming(racingNumber: string, f1Data: any): Partial<DriverTiming> | undefined {
     try {
       // Extraer valores de objetos anidados
       const lastLapTime = f1Data.LastLapTime?.Value ||
         (typeof f1Data.LastLapTime === 'string' ? f1Data.LastLapTime : '');
-      const gapToAhead = f1Data.IntervalToPositionAhead?.Value ||
+
+      // Mapeo de Gaps: F1 usa TimeDiffToPositionAhead y TimeDiffToFastest en el stream
+      const gapToAhead = f1Data.TimeDiffToPositionAhead || f1Data.IntervalToPositionAhead?.Value ||
         (typeof f1Data.IntervalToPositionAhead === 'string' ? f1Data.IntervalToPositionAhead : '');
-      const gapToLeader = f1Data.GapToLeader || '';
+
+      const gapToLeader = f1Data.TimeDiffToFastest || f1Data.GapToLeader || '';
 
       // Intentar obtener info estática del piloto
       const driverInfo = this.driverInfoMap.get(racingNumber);
@@ -245,20 +335,21 @@ export class F1LiveTimingService {
       }
 
       // Solo actualizar posición si viene en los datos
-      // Position: usar Line directamente (es número), o parsear Position si es string
-      if (f1Data.Line !== undefined && f1Data.Line !== null) {
-        update.position = f1Data.Line;
-      } else if (f1Data.Position) {
+      // PRIORIDAD: Position > Line
+      if (f1Data.Position) {
         const parsedPos = parseInt(f1Data.Position, 10);
         if (!isNaN(parsedPos)) {
           update.position = parsedPos;
         }
+      } else if (f1Data.Line !== undefined && f1Data.Line !== null) {
+        // Fix: Usar f1Data.Line en lugar de f1Data.Position que es undefined aquí
+        update.position = Number(f1Data.Line);
       }
 
       return update;
     } catch (e) {
       console.warn('Error mapeando datos del piloto:', e, f1Data);
-      return null;
+      return undefined;
     }
   }
 
@@ -338,9 +429,19 @@ export class F1LiveTimingService {
     if (f1Data.LastLapTime?.OverallFastest === true) {
       return 'session-best';
     }
+
     // Verificar en los sectores
     if (f1Data.Sectors) {
-      for (const sector of f1Data.Sectors) {
+      // Sectors puede ser Array o Object (diccionario)
+      let sectorsList: any[] = [];
+
+      if (Array.isArray(f1Data.Sectors)) {
+        sectorsList = f1Data.Sectors;
+      } else if (typeof f1Data.Sectors === 'object') {
+        sectorsList = Object.values(f1Data.Sectors);
+      }
+
+      for (const sector of sectorsList) {
         if (sector.OverallFastest === true) {
           return 'session-best';
         }

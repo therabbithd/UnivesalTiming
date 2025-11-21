@@ -66,7 +66,7 @@ export interface ChartData {
   count: number;
 }
 export interface DriverTiming {
-  position: number;
+  position: any;
   driverCode: string; // Ej: 'VER', 'HAM'
   driverName: string; // Ej: 'Verstappen', 'Hamilton'
   lapNumber: number;

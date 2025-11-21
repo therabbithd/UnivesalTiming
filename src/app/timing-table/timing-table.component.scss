@@ -1,54 +1,106 @@
 /* src/app/timing-table/timing-table.component.css */
 
 .timing-table {
-    width: 100%;
-    font-family: 'F1 Sans', sans-serif; /* Usar una fuente temática si es posible */
+  width: 100%;
+  font-family: 'F1 Sans', sans-serif;
+  /* Usar una fuente temática si es posible */
+}
+
+/* 🎨 Estilos para destacar las vueltas rápidas */
+
+/* Mejor vuelta de la sesión (Morado) */
+.row-session-best {
+  background-color: #5d258b50;
+  /* Base color morado con transparencia */
+  animation: flash-purple 1s ease-in-out;
+}
+
+/* Mejor vuelta personal (Verde) */
+.row-personal-best {
+  background-color: #28a74550;
+  /* Base color verde con transparencia */
+  animation: flash-green 1s ease-in-out;
+}
+
+/* Piloto en el Pit Lane (Amarillo/Naranja) */
+.row-pit {
+  background-color: #ffc10750;
+  /* Base color amarillo/naranja con transparencia */
+}
+
+/* --- Animaciones de Parpadeo (Flash) --- */
+
+/* Animación para la vuelta más rápida de la sesión */
+@keyframes flash-purple {
+  0% {
+    background-color: #5d258b;
   }
-  
-  /* 🎨 Estilos para destacar las vueltas rápidas */
-  
-  /* Mejor vuelta de la sesión (Morado) */
-  .row-session-best {
-    background-color: #5d258b50; /* Base color morado con transparencia */
-    animation: flash-purple 1s ease-in-out;
+
+  /* Color sólido al inicio */
+  100% {
+    background-color: transparent;
   }
-  
-  /* Mejor vuelta personal (Verde) */
-  .row-personal-best {
-    background-color: #28a74550; /* Base color verde con transparencia */
-    animation: flash-green 1s ease-in-out;
+
+  /* Transparente al final */
+}
+
+/* Animación para la mejor vuelta personal */
+@keyframes flash-green {
+  0% {
+    background-color: #28a745;
   }
-  
-  /* Piloto en el Pit Lane (Amarillo/Naranja) */
-  .row-pit {
-    background-color: #ffc10750; /* Base color amarillo/naranja con transparencia */
+
+  100% {
+    background-color: transparent;
   }
-  
-  /* --- Animaciones de Parpadeo (Flash) --- */
-  
-  /* Animación para la vuelta más rápida de la sesión */
-  @keyframes flash-purple {
-    0% { background-color: #5d258b; } /* Color sólido al inicio */
-    100% { background-color: transparent; } /* Transparente al final */
+}
+
+/* Asegurar que la fila sin animación no tenga color base */
+.mat-row {
+  transition: background-color 0.3s ease;
+}
+
+/* Ajustes de tipografía para la tabla */
+.mat-header-cell {
+  font-weight: bold;
+  color: #444;
+}
+
+.mat-cell {
+  font-size: 0.9em;
+}
+
+/* Estilos para la columna de piloto */
+.driver-info {
+  display: flex;
+  align-items: center;
+  border-left: 4px solid transparent;
+  /* Borde para el color de equipo */
+  padding-left: 8px;
+  height: 100%;
+}
+
+.driver-code {
+  font-weight: bold;
+  margin-right: 8px;
+  width: 35px;
+}
+
+.driver-name {
+  font-size: 0.85em;
+  color: #666;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  display: none;
+  /* Ocultar en pantallas pequeñas por defecto */
+}
+
+/* Mostrar nombre completo en pantallas más grandes */
+@media (min-width: 768px) {
+  .driver-name {
+    display: inline-block;
   }
-  
-  /* Animación para la mejor vuelta personal */
-  @keyframes flash-green {
-    0% { background-color: #28a745; }
-    100% { background-color: transparent; }
-  }
-  
-  /* Asegurar que la fila sin animación no tenga color base */
-  .mat-row {
-    transition: background-color 0.3s ease;
-  }
-  
-  /* Ajustes de tipografía para la tabla */
-  .mat-header-cell {
-      font-weight: bold;
-      color: #444;
-  }
-  
-  .mat-cell {
-      font-size: 0.9em;
-  }
+}

@@ -12,6 +12,7 @@ import { DriverTiming } from '../models/f1-livetiming.model';
 export class F1LiveTimingService {
 
   private readonly baseUrl = '/f1-api/static';
+  private driverInfoMap = new Map<string, any>();
 
   constructor(private http: HttpClient) { }
 
@@ -28,37 +29,63 @@ export class F1LiveTimingService {
    */
   getLiveTimingData(sessionPath: string): Observable<DriverTiming[]> {
     const streamPath = 'TimingData.jsonStream';
+    const driverListPath = 'DriverList.json';
 
-    return timer(0, 1000).pipe( // Cada segundo
-      switchMap(() =>
-        this.http.get(`${this.baseUrl}/${sessionPath}${streamPath}`, { responseType: 'text' })
-          .pipe(
-            catchError(err => {
-              console.error('Error obteniendo stream:', err);
-              return of('');
-            })
-          )
-      ),
-      map((rawStream: string) => {
-        if (!rawStream || rawStream.trim() === '') {
-          return [];
-        }
-
-        // Parsear todas las actualizaciones del stream
-        const updates = this.parseTimingStream(rawStream);
-        console.log('Total actualizaciones encontradas:', updates.length);
-
-        // Calcular el estado final de los pilotos aplicando todas las actualizaciones en orden
-        const finalState = this.processUpdatesToState(updates);
-
-        console.log('Total pilotos en estado final:', finalState.length);
-        return finalState;
-      }),
+    // Primero obtener la lista de pilotos
+    return this.http.get(`${this.baseUrl}/${sessionPath}${driverListPath}`).pipe(
       catchError(err => {
-        console.error('Error en live timing:', err);
-        return of([] as DriverTiming[]);
+        console.warn('No se pudo cargar DriverList.json', err);
+        return of({});
+      }),
+      switchMap((driverList: any) => {
+        // Procesar y guardar la info de los pilotos
+        this.processDriverList(driverList);
+
+        // Iniciar el stream de datos
+        return timer(0, 1000).pipe( // Cada segundo
+          switchMap(() =>
+            this.http.get(`${this.baseUrl}/${sessionPath}${streamPath}`, { responseType: 'text' })
+              .pipe(
+                catchError(err => {
+                  console.error('Error obteniendo stream:', err);
+                  return of('');
+                })
+              )
+          ),
+          map((rawStream: string) => {
+            if (!rawStream || rawStream.trim() === '') {
+              return [];
+            }
+
+            // Parsear todas las actualizaciones del stream
+            const updates = this.parseTimingStream(rawStream);
+            // console.log('Total actualizaciones encontradas:', updates.length);
+
+            // Calcular el estado final de los pilotos aplicando todas las actualizaciones en orden
+            const finalState = this.processUpdatesToState(updates);
+
+            // console.log('Total pilotos en estado final:', finalState.length);
+            return finalState;
+          }),
+          catchError(err => {
+            console.error('Error en live timing:', err);
+            return of([] as DriverTiming[]);
+          })
+        );
       })
     );
+  }
+
+  private processDriverList(driverList: any) {
+    this.driverInfoMap.clear();
+    if (driverList) {
+      Object.keys(driverList).forEach(key => {
+        const driver = driverList[key];
+        // Guardar por número de carrera y por TLA si es posible
+        this.driverInfoMap.set(driver.RacingNumber, driver);
+        this.driverInfoMap.set(driver.Tla, driver);
+      });
+    }
   }
 
   /**
@@ -76,10 +103,15 @@ export class F1LiveTimingService {
           driverMap.set(key, { ...existing, ...update } as DriverTiming);
         } else {
           // Nuevo piloto - crear entrada completa con valores por defecto
+          // Intentar completar datos faltantes desde driverInfoMap
+          const driverInfo = this.driverInfoMap.get(key) || this.driverInfoMap.get(update.driverCode || '');
+
           driverMap.set(key, {
             position: update.position || 0,
             driverCode: key,
-            driverName: update.driverName || '',
+            driverName: update.driverName || (driverInfo ? driverInfo.BroadcastName : ''),
+            teamName: update.teamName || (driverInfo ? driverInfo.TeamName : ''),
+            teamColor: update.teamColor || (driverInfo ? driverInfo.TeamColour : ''),
             lapNumber: update.lapNumber || 0,
             lastLapTime: update.lastLapTime || '',
             gapToLeader: update.gapToLeader || '',
@@ -169,17 +201,48 @@ export class F1LiveTimingService {
         (typeof f1Data.IntervalToPositionAhead === 'string' ? f1Data.IntervalToPositionAhead : '');
       const gapToLeader = f1Data.GapToLeader || '';
 
+      // Intentar obtener info estática del piloto
+      const driverInfo = this.driverInfoMap.get(racingNumber);
+
       // Mapeo de campos del JSON de F1 al modelo DriverTiming
       const update: Partial<DriverTiming> = {
-        driverCode: f1Data.Driver || f1Data.DriverCode || racingNumber,
-        driverName: f1Data.DriverName || f1Data.Name || '',
-        lapNumber: f1Data.NumberOfLaps ?? f1Data.Lap ?? f1Data.LapNumber ?? 0,
-        lastLapTime: this.formatLapTime(lastLapTime),
-        gapToLeader: this.formatGap(gapToLeader),
-        gapToAhead: this.formatGap(gapToAhead),
-        isPit: f1Data.InPit === true,
-        statusColor: this.determineStatusColor(f1Data)
+        driverCode: f1Data.Driver || f1Data.DriverCode || (driverInfo ? driverInfo.Tla : racingNumber)
       };
+
+      if (driverInfo) {
+        if (!update.driverName) update.driverName = driverInfo.BroadcastName;
+        if (!update.teamName) update.teamName = driverInfo.TeamName;
+        if (!update.teamColor) update.teamColor = driverInfo.TeamColour;
+      }
+
+      if (f1Data.DriverName || f1Data.Name) {
+        update.driverName = f1Data.DriverName || f1Data.Name;
+      }
+
+      if (f1Data.NumberOfLaps !== undefined) {
+        update.lapNumber = f1Data.NumberOfLaps;
+      }
+
+      if (lastLapTime) {
+        update.lastLapTime = this.formatLapTime(lastLapTime);
+      }
+
+      if (gapToLeader) {
+        update.gapToLeader = this.formatGap(gapToLeader);
+      }
+
+      if (gapToAhead) {
+        update.gapToAhead = this.formatGap(gapToAhead);
+      }
+
+      if (f1Data.InPit !== undefined) {
+        update.isPit = f1Data.InPit === true;
+      }
+
+      const status = this.determineStatusColor(f1Data);
+      if (status !== 'normal') {
+        update.statusColor = status;
+      }
 
       // Solo actualizar posición si viene en los datos
       // Position: usar Line directamente (es número), o parsear Position si es string

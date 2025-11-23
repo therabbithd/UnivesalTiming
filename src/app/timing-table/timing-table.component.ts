@@ -1,38 +1,31 @@
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClientModule } from '@angular/common/http';
-import { MatCardModule } from '@angular/material/card'; // Importación para <mat-card>
-import { MatTableModule } from '@angular/material/table'; // Importación para <table mat-table>
+import { MatCardModule } from '@angular/material/card';
+import { MatTableModule } from '@angular/material/table';
+import { Observable, switchMap } from 'rxjs';
 
 import { F1LiveTimingService } from '../services/f1-livetiming.service';
-// Nota: Tu modelo DriverTiming debe ser accesible, asumo que lo has movido
-// al mismo archivo de modelo que el servicio si no existe un archivo DriverTiming.model.ts aparte.
 import { DriverTiming } from '../models/f1-livetiming.model';
-import { Observable, switchMap } from 'rxjs';
+import { CircuitMapComponent } from '../components/circuit-map/circuit-map.component';
 
 @Component({
   selector: 'app-timing-table',
-  // 💡 CLAVE 1: Definir como componente Standalone
   standalone: true,
-  // 💡 CLAVE 2: Importar módulos de Angular y Material directamente
   imports: [
     CommonModule,
     HttpClientModule,
     MatCardModule,
-    MatTableModule
+    MatTableModule,
+    CircuitMapComponent
   ],
   templateUrl: './timing-table.component.html',
   styleUrls: ['./timing-table.component.scss'],
-  // 🚀 CLAVE: Usar OnPush para mejorar el rendimiento con flujos de datos rápidos
-  changeDetection: ChangeDetectionStrategy.OnPush,
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class TimingTableComponent implements OnInit {
-
-  // 🏁 CLAVE: Observable para enlazar directamente con la tabla usando la 'async' pipe
-  timingData$!: Observable<DriverTiming[]>;
-
-  // 🛠️ Columnas a mostrar en la tabla de Material
-  displayedColumns: string[] = [
+  public timingData$!: Observable<DriverTiming[]>;
+  public displayedColumns: string[] = [
     'position',
     'driverCode',
     'tyre',
@@ -41,20 +34,28 @@ export class TimingTableComponent implements OnInit {
     'gapToLeader',
     'gapToAhead'
   ];
+  public circuitKey: string | number = '';
+  public year: number = 2025;
+  public sessionPath: string = '';
 
-  constructor(private f1Service: F1LiveTimingService) { }
+  constructor(
+    private f1Service: F1LiveTimingService,
+    private cdr: ChangeDetectorRef
+  ) { }
 
   ngOnInit(): void {
-    // Primero obtener la última sesión disponible y luego iniciar el stream
     this.timingData$ = this.f1Service.getLatestSessionPath().pipe(
-      switchMap(path => {
-        console.log('Cargando datos de sesión:', path);
-        return this.f1Service.getLiveTimingData(path);
+      switchMap(sessionInfo => {
+        console.log('Cargando datos de sesión:', sessionInfo);
+        this.circuitKey = sessionInfo.circuitKey;
+        this.year = sessionInfo.year;
+        this.sessionPath = sessionInfo.path;
+        this.cdr.markForCheck();
+        return this.f1Service.getLiveTimingData(sessionInfo.path);
       })
     );
   }
 
-  // 🎨 Aplica clases CSS para el estilo condicional (color de mejor vuelta, pit)
   getRowClass(driver: DriverTiming): string {
     if (driver.isPit) return 'row-pit';
 

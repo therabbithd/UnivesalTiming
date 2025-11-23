@@ -26,9 +26,13 @@ export class F1LiveTimingService {
   /**
    * Obtiene el path de la última sesión disponible en 2025
    */
-  getLatestSessionPath(): Observable<string> {
+  /**
+   * Obtiene el path de la última sesión disponible en 2025 y datos del circuito
+   */
+  getLatestSessionPath(): Observable<{ path: string, circuitKey: string, year: number }> {
     // const t = new Date().getTime();
-    return this.http.get<any>(`${this.baseUrl}/2025/Index.json`).pipe(
+    const year = 2025;
+    return this.http.get<any>(`${this.baseUrl}/${year}/Index.json`).pipe(
       map(response => {
         if (!response || !response.Meetings || response.Meetings.length === 0) {
           console.error('Respuesta Index.json inválida:', response);
@@ -40,6 +44,7 @@ export class F1LiveTimingService {
         // Buscar el último meeting que tenga sesiones
         const meetings = response.Meetings;
         let lastSessionPath = '';
+        let circuitKey = '';
 
         // Iterar desde el final para encontrar el más reciente
         // Recorremos los meetings de atrás hacia adelante
@@ -52,7 +57,8 @@ export class F1LiveTimingService {
               const session = meeting.Sessions[j];
               if (session.Path) {
                 lastSessionPath = session.Path;
-                console.log(`Última sesión disponible encontrada: ${meeting.Name} - ${session.Name}`, lastSessionPath);
+                circuitKey = meeting.Circuit?.Key || '';
+                console.log(`Última sesión disponible encontrada: ${meeting.Name} - ${session.Name}`, lastSessionPath, circuitKey);
                 break;
               }
             }
@@ -68,12 +74,17 @@ export class F1LiveTimingService {
           throw new Error('No se encontraron sesiones disponibles');
         }
 
-        return lastSessionPath;
+        return { path: lastSessionPath, circuitKey, year };
       }),
       catchError(err => {
         console.error('Error obteniendo la última sesión. Detalles:', err);
         // Fallback a la última sesión conocida (Pre-Season Testing Day 3)
-        return of('2025/2025-02-28_Pre-Season_Testing/2025-02-28_Day_3/');
+        // Asumimos Bahrain (Circuit Key 63) para testing si falla
+        return of({
+          path: '2025/2025-02-28_Pre-Season_Testing/2025-02-28_Day_3/',
+          circuitKey: '63',
+          year: 2025
+        });
       })
     );
   }
@@ -130,6 +141,62 @@ export class F1LiveTimingService {
             return of([] as DriverTiming[]);
           })
         );
+      })
+    );
+  }
+
+  /**
+   * Obtiene las posiciones de los pilotos en el circuito
+   */
+  getDriverPositions(sessionPath: string): Observable<any[]> {
+    const streamPath = 'Position.z.jsonStream';
+
+    return timer(0, 1000).pipe(
+      switchMap(() =>
+        this.http.get(`${this.baseUrl}/${sessionPath}${streamPath}`, { responseType: 'text' }).pipe(
+          catchError(err => {
+            // console.warn('Error polling positions:', err);
+            return of('');
+          })
+        )
+      ),
+      map((rawStream: string) => {
+        if (!rawStream) return [];
+
+        // El stream contiene múltiples objetos JSON concatenados.
+        // Nos interesa el último estado válido.
+        const lines = rawStream.split('\r\n').filter(line => line.trim() !== '');
+        if (lines.length === 0) return [];
+
+        // Parsear la última línea que tenga datos de posición
+        // A veces la última línea es solo un timestamp, hay que buscar hacia atrás
+        for (let i = lines.length - 1; i >= 0; i--) {
+          try {
+            const data = JSON.parse(lines[i]);
+            if (data && data.Position) {
+              return data.Position;
+            }
+          } catch (e) {
+            // Ignorar líneas malformadas
+          }
+        }
+        return [];
+      }),
+      map((positions: any[]) => {
+        // Mapear a un formato más amigable y mezclar con info del piloto
+        return positions.map(pos => {
+          const driverInfo = this.driverInfoMap.get(pos.RacingNumber) || {};
+          return {
+            racingNumber: pos.RacingNumber,
+            x: pos.X,
+            y: pos.Y,
+            z: pos.Z,
+            status: pos.Status,
+            driverName: driverInfo.BroadcastName || pos.RacingNumber,
+            teamColor: driverInfo.TeamColour || 'ffffff',
+            tla: driverInfo.Tla || ''
+          };
+        });
       })
     );
   }

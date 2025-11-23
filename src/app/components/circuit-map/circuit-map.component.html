@@ -1,0 +1,13 @@
+<div class="circuit-map-container">
+    <div *ngIf="isLoading" class="loading-map">Loading Track Map...</div>
+    <div *ngIf="error" class="error-map">{{ error }}</div>
+
+    <div class="canvas-wrapper" [class.hidden]="isLoading || error">
+        <canvas #mapCanvas></canvas>
+    </div>
+
+    <div class="track-info" *ngIf="trackData">
+        <span class="circuit-name">{{ trackData.circuitName }}</span>
+        <span class="location">{{ trackData.location }}, {{ trackData.countryName }}</span>
+    </div>
+</div>

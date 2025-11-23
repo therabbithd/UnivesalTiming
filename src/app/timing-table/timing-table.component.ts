@@ -35,6 +35,7 @@ export class TimingTableComponent implements OnInit {
   displayedColumns: string[] = [
     'position',
     'driverCode',
+    'tyre',
     'lapNumber',
     'lastLapTime',
     'gapToLeader',

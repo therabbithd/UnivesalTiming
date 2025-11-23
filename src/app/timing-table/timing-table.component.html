@@ -15,18 +15,8 @@
       <th mat-header-cell *matHeaderCellDef>DRIVER</th>
       <td mat-cell *matCellDef="let driver">
         <div class="driver-info" [style.border-left-color]="'#' + driver.teamColor">
-          <span class="driver-code">{{ driver.driverCode }}</span>
-          <span class="driver-name">{{ driver.driverName }}</span>
-        </div>
-      </td>
-    </ng-container>
 
-    <ng-container matColumnDef="lapNumber">
-      <th mat-header-cell *matHeaderCellDef>LAP</th>
-      <td mat-cell *matCellDef="let driver">{{ driver.lapNumber }}</td>
-    </ng-container>
-
-    <ng-container matColumnDef="lastLapTime">
+          <ng-container matColumnDef="lastLapTime">
       <th mat-header-cell *matHeaderCellDef>TIME</th>
       <td mat-cell *matCellDef="let driver">
         <strong>{{ driver.lastLapTime }}</strong>

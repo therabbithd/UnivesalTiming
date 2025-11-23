@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, timer, switchMap, of, catchError, startWith, scan } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { DriverTiming } from '../models/f1-livetiming.model';
+import { DriverTiming, TyreStint } from '../models/f1-livetiming.model';
 
 @Injectable({
   providedIn: 'root'
@@ -11,6 +11,7 @@ export class F1LiveTimingService {
 
   private readonly baseUrl = '/f1-api/static';
   private driverInfoMap = new Map<string, any>();
+  private tyreDataMap = new Map<string, TyreStint[]>();
   private hasLoggedDebug = false;
 
   constructor(private http: HttpClient) { }
@@ -85,6 +86,9 @@ export class F1LiveTimingService {
     const streamPath = 'TimingData.jsonStream';
     const driverListPath = 'DriverList.json';
 
+    // Iniciar el polling de neumáticos en paralelo (sin bloquear el stream principal)
+    this.pollTyreData(sessionPath).subscribe();
+
     // Primero obtener la lista de pilotos
     return this.http.get(`${this.baseUrl}/${sessionPath}${driverListPath}`).pipe(
       catchError(err => {
@@ -126,6 +130,30 @@ export class F1LiveTimingService {
             return of([] as DriverTiming[]);
           })
         );
+      })
+    );
+  }
+
+  /**
+   * Polling para obtener datos de neumáticos
+   */
+  private pollTyreData(sessionPath: string): Observable<any> {
+    return timer(0, 5000).pipe( // Cada 5 segundos
+      switchMap(() => this.http.get<any>(`${this.baseUrl}/${sessionPath}TyreStintSeries.json`)),
+      map(response => {
+        if (response && response.Stints) {
+          Object.keys(response.Stints).forEach(racingNumber => {
+            const stints = response.Stints[racingNumber];
+            if (Array.isArray(stints) && stints.length > 0) {
+              // Guardamos todos los stints
+              this.tyreDataMap.set(racingNumber, stints);
+            }
+          });
+        }
+      }),
+      catchError(err => {
+        console.warn('Error obteniendo TyreStintSeries.json', err);
+        return of(null);
       })
     );
   }
@@ -174,6 +202,31 @@ export class F1LiveTimingService {
             statusColor: update.statusColor || 'normal',
             ...update
           } as DriverTiming);
+        }
+      }
+
+      // Actualizar información de neumáticos si existe
+      if (key) {
+        const driver = driverMap.get(key);
+        if (driver) {
+          // Intentar obtener el número de carrera
+          let racingNumber = '';
+          const info = this.driverInfoMap.get(key);
+          if (info) {
+            racingNumber = info.RacingNumber;
+          } else {
+            // Si key ya es un número, usarlo
+            if (!isNaN(Number(key))) {
+              racingNumber = key;
+            }
+          }
+
+          if (racingNumber) {
+            const tyreInfo = this.tyreDataMap.get(racingNumber);
+            if (tyreInfo) {
+              driver.tyreHistory = tyreInfo;
+            }
+          }
         }
       }
     });

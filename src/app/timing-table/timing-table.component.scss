@@ -16,11 +16,7 @@
 }
 
 /* Mejor vuelta personal (Verde) */
-.row-personal-best {
-  background-color: #28a74550;
-  /* Base color verde con transparencia */
-  animation: flash-green 1s ease-in-out;
-}
+
 
 /* Piloto en el Pit Lane (Amarillo/Naranja) */
 .row-pit {
@@ -42,17 +38,6 @@
   }
 
   /* Transparente al final */
-}
-
-/* Animación para la mejor vuelta personal */
-@keyframes flash-green {
-  0% {
-    background-color: #28a745;
-  }
-
-  100% {
-    background-color: transparent;
-  }
 }
 
 /* Asegurar que la fila sin animación no tenga color base */
@@ -103,4 +88,75 @@
   .driver-name {
     display: inline-block;
   }
+}
+
+/* Tyre Styles */
+.tyre-history-container {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  align-items: center;
+  /* Permitir que se expanda para mostrar todos */
+  flex-wrap: nowrap;
+}
+
+.tyre-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.tyre-badge {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 20px;
+  /* Más pequeño para historial */
+  height: 20px;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 0.7em;
+  color: #000;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tyre-soft {
+  background-color: #ff3b30;
+  /* Red */
+  color: white;
+  border-color: #ff3b30;
+}
+
+.tyre-medium {
+  background-color: #ffcc00;
+  /* Yellow */
+  color: black;
+  border-color: #b38f00;
+}
+
+.tyre-hard {
+  background-color: #f0f0f0;
+  /* White/Light Gray */
+  color: black;
+  border-color: #999;
+}
+
+.tyre-intermediate {
+  background-color: #34c759;
+  /* Green */
+  color: white;
+  border-color: #34c759;
+}
+
+.tyre-wet {
+  background-color: #007aff;
+  /* Blue */
+  color: white;
+  border-color: #007aff;
+}
+
+.tyre-laps {
+  font-size: 0.8em;
+  color: #666;
 }

@@ -65,6 +65,15 @@ export interface ChartData {
   type: string;
   count: number;
 }
+
+export interface TyreStint {
+  Compound: string;
+  New: string;
+  TyresNotChanged: string;
+  TotalLaps: number;
+  StartLaps: number;
+}
+
 export interface DriverTiming {
   position: any;
   driverCode: string; // Ej: 'VER', 'HAM'
@@ -77,6 +86,7 @@ export interface DriverTiming {
   statusColor: 'personal-best' | 'session-best' | 'normal' | 'none'; // Para resaltar tiempos
   teamName?: string;
   teamColor?: string;
+  tyreHistory?: TyreStint[];
 }
 
 export interface DriverInfo {

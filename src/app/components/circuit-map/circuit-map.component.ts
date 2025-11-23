@@ -98,6 +98,8 @@ export class CircuitMapComponent implements OnChanges, AfterViewInit, OnDestroy 
     updateDriverPositions(positions: any[]) {
         if (!this.chart || !this.trackData) return;
 
+        // console.log(`Updating driver positions: ${positions.length}`);
+
         const rotatedPositions = this.transformCoordinates(
             positions.map(p => p.x),
             positions.map(p => p.y)
@@ -114,7 +116,7 @@ export class CircuitMapComponent implements OnChanges, AfterViewInit, OnDestroy 
         const colors = positions.map(p => '#' + (p.teamColor || '000000'));
         (this.chart.data.datasets[1] as any).pointBackgroundColor = colors;
 
-        this.chart.update('none'); // Efficient update
+        this.chart.update(); // Remove 'none' to allow canvas clear
     }
 
     transformCoordinates(xArr: number[], yArr: number[]): { x: number, y: number }[] {

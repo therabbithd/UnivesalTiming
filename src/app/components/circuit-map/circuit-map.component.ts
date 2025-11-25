@@ -203,8 +203,7 @@ export class CircuitMapComponent implements OnChanges, AfterViewInit, OnDestroy 
                     legend: { display: false },
                     tooltip: { enabled: false }, // Custom tooltips maybe later
                     datalabels: {
-                        // Global datalabels settings
-                        color: 'white'
+                        display: false
                     }
                 },
                 scales: {

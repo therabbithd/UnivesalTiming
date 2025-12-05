@@ -1,575 +1,369 @@
+// src/app/services/f1-livetiming-stream.service.ts
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, timer, switchMap, of, catchError, startWith, scan } from 'rxjs';
-import { map } from 'rxjs/operators';
-import { DriverTiming, TyreStint } from '../models/f1-livetiming.model';
+import { BehaviorSubject, Observable } from 'rxjs';
+import * as pako from 'pako';
+import { DriverTiming, DriverInfo, TyreStint } from '../models/f1-livetiming.model';
+
+interface SignalRMessage {
+  M?: Array<{ M: string; A: any[] }>;
+  R?: any;
+  I?: string;
+}
+
+interface LiveTimingState {
+  TimingData?: {
+    Lines?: {
+      [driverNumber: string]: {
+        Position?: string;
+        RacingNumber?: string;
+        Line?: number;
+        Retired?: boolean;
+        InPit?: boolean;
+        PitOut?: boolean;
+        Stopped?: boolean;
+        Status?: number;
+        LastLapTime?: {
+          Value?: string;
+          PersonalFastest?: boolean;
+          OverallFastest?: boolean;
+        };
+        BestLapTime?: {
+          Value?: string;
+        };
+        NumberOfLaps?: number;
+        GapToLeader?: string;
+        IntervalToPositionAhead?: {
+          Value?: string;
+        };
+      };
+    };
+  };
+  DriverList?: {
+    [driverNumber: string]: {
+      RacingNumber?: string;
+      BroadcastName?: string;
+      FullName?: string;
+      Tla?: string;
+      Line?: number;
+      TeamName?: string;
+      TeamColour?: string;
+      FirstName?: string;
+      LastName?: string;
+      Reference?: string;
+      HeadshotUrl?: string;
+    };
+  };
+  TimingAppData?: {
+    Lines?: {
+      [driverNumber: string]: {
+        Stints?: TyreStint[];
+      };
+    };
+  };
+  Position?: {
+    Position?: {
+      [driverNumber: string]: {
+        X?: number;
+        Y?: number;
+        Z?: number;
+      };
+    };
+  };
+  CarData?: any;
+  SessionInfo?: any;
+  SessionData?: any;
+  TrackStatus?: any;
+  WeatherData?: any;
+  RaceControlMessages?: any;
+  TeamRadio?: any;
+  ExtrapolatedClock?: any;
+  LapCount?: any;
+  Heartbeat?: any;
+}
 
 @Injectable({
   providedIn: 'root'
 })
-export class F1LiveTimingService {
+export class F1LiveTimingStreamService {
+  private readonly SIGNALR_HUB = 'Streaming';
+  private readonly RETRY_FREQ = 10000;
 
-  private readonly baseUrl = '/f1-api/static';
-  private driverInfoMap = new Map<string, any>();
-  private tyreDataMap = new Map<string, TyreStint[]>();
-  private hasLoggedDebug = false;
+  private ws: WebSocket | null = null;
+  private liveState = new BehaviorSubject<LiveTimingState>({});
+  private messageCount = 0;
+  private emptyMessageCount = 0;
+  private reconnectTimeout: any;
 
-  constructor(private http: HttpClient) { }
+  // Observables públicos
+  public state$: Observable<LiveTimingState> = this.liveState.asObservable();
+  
+  constructor() {}
 
-  // Métodos existentes (sin cambios)
-  getAvailableYears() { /* ... */ }
-  getSeason(year: number) { /* ... */ }
-  getSessionData<T = any>(sessionPath: string, feedPath: string): Observable<T> {
-    return this.http.get<T>(`${this.baseUrl}/${sessionPath}${feedPath}`);
-  }
+  async connect(): Promise<void> {
+    console.log('[F1 Stream] Connecting to live timing stream via proxy');
 
-  /**
-   * Obtiene el path de la última sesión disponible en 2025
-   */
-  /**
-   * Obtiene el path de la última sesión disponible en 2025 y datos del circuito
-   */
-  getLatestSessionPath(): Observable<{ path: string, circuitKey: string, year: number }> {
-    // const t = new Date().getTime();
-    const year = 2025;
-    return this.http.get<any>(`${this.baseUrl}/${year}/Index.json`).pipe(
-      map(response => {
-        if (!response || !response.Meetings || response.Meetings.length === 0) {
-          console.error('Respuesta Index.json inválida:', response);
-          throw new Error('No se encontraron meetings en 2025');
-        }
-
-        console.log(`Encontrados ${response.Meetings.length} meetings.`);
-
-        // Buscar el último meeting que tenga sesiones
-        const meetings = response.Meetings;
-        let lastSessionPath = '';
-        let circuitKey = '';
-
-        // Iterar desde el final para encontrar el más reciente
-        // Recorremos los meetings de atrás hacia adelante
-        for (let i = meetings.length - 1; i >= 0; i--) {
-          const meeting = meetings[i];
-          if (meeting.Sessions && meeting.Sessions.length > 0) {
-            // Recorremos las sesiones de este meeting de atrás hacia adelante
-            // para encontrar la última que tenga un Path válido
-            for (let j = meeting.Sessions.length - 1; j >= 0; j--) {
-              const session = meeting.Sessions[j];
-              if (session.Path) {
-                lastSessionPath = session.Path;
-                circuitKey = meeting.Circuit?.Key || '';
-                console.log(`Última sesión disponible encontrada: ${meeting.Name} - ${session.Name}`, lastSessionPath, circuitKey);
-                break;
-              }
-            }
-          }
-
-          // Si ya encontramos una sesión, terminamos la búsqueda
-          if (lastSessionPath) {
-            break;
-          }
-        }
-
-        if (!lastSessionPath) {
-          throw new Error('No se encontraron sesiones disponibles');
-        }
-
-        return { path: lastSessionPath, circuitKey, year };
-      }),
-      catchError(err => {
-        console.error('Error obteniendo la última sesión. Detalles:', err);
-        // Fallback a la última sesión conocida (Pre-Season Testing Day 3)
-        // Asumimos Bahrain (Circuit Key 63) para testing si falla
-        return of({
-          path: '2025/2025-02-28_Pre-Season_Testing/2025-02-28_Day_3/',
-          circuitKey: '63',
-          year: 2025
-        });
-      })
-    );
-  }
-
-  /**
-   * LIVE TIMING REAL F1 - FUNCIONA CON TimingData.jsonStream
-   * Soporta el formato real: timestamp + JSON pegado + múltiples actualizaciones
-   */
-  getLiveTimingData(sessionPath: string): Observable<DriverTiming[]> {
-    const streamPath = 'TimingData.jsonStream';
-    const driverListPath = 'DriverList.json';
-
-    // Iniciar el polling de neumáticos en paralelo (sin bloquear el stream principal)
-    this.pollTyreData(sessionPath).subscribe();
-
-    // Primero obtener la lista de pilotos
-    return this.http.get(`${this.baseUrl}/${sessionPath}${driverListPath}`).pipe(
-      catchError(err => {
-        console.warn('No se pudo cargar DriverList.json', err);
-        return of({});
-      }),
-      switchMap((driverList: any) => {
-        // Procesar y guardar la info de los pilotos
-        this.processDriverList(driverList);
-
-        // Iniciar el stream de datos
-        return timer(0, 1000).pipe( // Cada segundo
-          switchMap(() =>
-            this.http.get(`${this.baseUrl}/${sessionPath}${streamPath}`, { responseType: 'text' })
-              .pipe(
-                catchError(err => {
-                  console.error('Error obteniendo stream:', err);
-                  return of('');
-                })
-              )
-          ),
-          map((rawStream: string) => {
-            if (!rawStream || rawStream.trim() === '') {
-              return [];
-            }
-
-            // Parsear todas las actualizaciones del stream
-            const updates = this.parseTimingStream(rawStream);
-            // console.log('Total actualizaciones encontradas:', updates.length);
-
-            // Calcular el estado final de los pilotos aplicando todas las actualizaciones en orden
-            const finalState = this.processUpdatesToState(updates);
-
-            // console.log('Total pilotos en estado final:', finalState.length);
-            return finalState;
-          }),
-          catchError(err => {
-            console.error('Error en live timing:', err);
-            return of([] as DriverTiming[]);
-          })
-        );
-      })
-    );
-  }
-
-  /**
-   * Obtiene las posiciones de los pilotos en el circuito
-   */
-  getDriverPositions(sessionPath: string): Observable<any[]> {
-    const streamPath = 'Position.z.jsonStream';
-
-    return timer(0, 1000).pipe(
-      switchMap(() =>
-        this.http.get(`${this.baseUrl}/${sessionPath}${streamPath}`, { responseType: 'text' }).pipe(
-          catchError(err => {
-            // console.warn('Error polling positions:', err);
-            return of('');
-          })
-        )
-      ),
-      map((rawStream: string) => {
-        if (!rawStream) return [];
-
-        // El stream contiene múltiples objetos JSON concatenados.
-        // Nos interesa el último estado válido.
-        const lines = rawStream.split('\r\n').filter(line => line.trim() !== '');
-        if (lines.length === 0) return [];
-
-        // Parsear la última línea que tenga datos de posición
-        // A veces la última línea es solo un timestamp, hay que buscar hacia atrás
-        for (let i = lines.length - 1; i >= 0; i--) {
-          try {
-            const data = JSON.parse(lines[i]);
-            if (data && data.Position) {
-              return data.Position;
-            }
-          } catch (e) {
-            // Ignorar líneas malformadas
-          }
-        }
-        return [];
-      }),
-      map((positions: any[]) => {
-        // Mapear a un formato más amigable y mezclar con info del piloto
-        return positions.map(pos => {
-          const driverInfo = this.driverInfoMap.get(pos.RacingNumber) || {};
-          return {
-            racingNumber: pos.RacingNumber,
-            x: pos.X,
-            y: pos.Y,
-            z: pos.Z,
-            status: pos.Status,
-            driverName: driverInfo.BroadcastName || pos.RacingNumber,
-            teamColor: driverInfo.TeamColour || 'ffffff',
-            tla: driverInfo.Tla || ''
-          };
-        });
-      })
-    );
-  }
-
-  /**
-   * Polling para obtener datos de neumáticos
-   */
-  private pollTyreData(sessionPath: string): Observable<any> {
-    return timer(0, 5000).pipe( // Cada 5 segundos
-      switchMap(() => this.http.get<any>(`${this.baseUrl}/${sessionPath}TyreStintSeries.json`)),
-      map(response => {
-        if (response && response.Stints) {
-          Object.keys(response.Stints).forEach(racingNumber => {
-            const stints = response.Stints[racingNumber];
-            if (Array.isArray(stints) && stints.length > 0) {
-              // Guardamos todos los stints
-              this.tyreDataMap.set(racingNumber, stints);
-            }
-          });
-        }
-      }),
-      catchError(err => {
-        console.warn('Error obteniendo TyreStintSeries.json', err);
-        return of(null);
-      })
-    );
-  }
-
-  private processDriverList(driverList: any) {
-    this.driverInfoMap.clear();
-    if (driverList) {
-      Object.keys(driverList).forEach(key => {
-        const driver = driverList[key];
-        // Guardar por número de carrera y por TLA si es posible
-        this.driverInfoMap.set(driver.RacingNumber, driver);
-        this.driverInfoMap.set(driver.Tla, driver);
-      });
-    }
-  }
-
-  /**
-   * Procesa una lista de actualizaciones para generar el estado final de los pilotos
-   */
-  private processUpdatesToState(updates: Partial<DriverTiming>[]): DriverTiming[] {
-    const driverMap = new Map<string, DriverTiming>();
-
-    updates.forEach(update => {
-      const key = update.driverCode;
-      if (key) {
-        const existing = driverMap.get(key);
-        if (existing) {
-          // Merge con datos existentes
-          driverMap.set(key, { ...existing, ...update } as DriverTiming);
-        } else {
-          // Nuevo piloto - crear entrada completa con valores por defecto
-          // Intentar completar datos faltantes desde driverInfoMap
-          const driverInfo = this.driverInfoMap.get(key) || this.driverInfoMap.get(update.driverCode || '');
-
-          driverMap.set(key, {
-            position: update.position || 0,
-            driverCode: key,
-            driverName: update.driverName || (driverInfo ? driverInfo.BroadcastName : ''),
-            teamName: update.teamName || (driverInfo ? driverInfo.TeamName : ''),
-            teamColor: update.teamColor || (driverInfo ? driverInfo.TeamColour : ''),
-            lapNumber: update.lapNumber || 0,
-            lastLapTime: update.lastLapTime || '',
-            gapToLeader: update.gapToLeader || '',
-            gapToAhead: update.gapToAhead || '',
-            isPit: update.isPit || false,
-            statusColor: update.statusColor || 'normal',
-            ...update
-          } as DriverTiming);
-        }
-      }
-
-      // Actualizar información de neumáticos si existe
-      if (key) {
-        const driver = driverMap.get(key);
-        if (driver) {
-          // Intentar obtener el número de carrera
-          let racingNumber = '';
-          const info = this.driverInfoMap.get(key);
-          if (info) {
-            racingNumber = info.RacingNumber;
-          } else {
-            // Si key ya es un número, usarlo
-            if (!isNaN(Number(key))) {
-              racingNumber = key;
-            }
-          }
-
-          if (racingNumber) {
-            const tyreInfo = this.tyreDataMap.get(racingNumber);
-            if (tyreInfo) {
-              driver.tyreHistory = tyreInfo;
-            }
-          }
-        }
-      }
-    });
-
-    // Convertimos a array y ordenamos por posición
-    const result = Array.from(driverMap.values());
-    result.sort((a, b) => {
-      // Asegurar que undefined se vaya al final, pero permitir 0 si es válido
-      const posA = (a.position !== undefined && a.position !== null) ? a.position : 999;
-      const posB = (b.position !== undefined && b.position !== null) ? b.position : 999;
-      return posA - posB;
-    });
-
-    // DEBUG: Loggear los primeros 5 para ver qué está pasando
-    if (result.length > 0) {
-      console.log('Top 5 drivers:', result.slice(0, 5).map(d => ({
-        pos: d.position,
-        code: d.driverCode,
-        name: d.driverName
-      })));
-    }
-
-    return result;
-  }
-
-  /**
-   * Parsea el stream real de F1: múltiples líneas como 00:00:04.219{"Lines":{...}}
-   */
-  private parseTimingStream(raw: string): Partial<DriverTiming>[] {
-    const updates: Partial<DriverTiming>[] = [];
-
-    // Dividir por timestamps (formato: HH:MM:SS.mmm, aceptando 1 o 2 dígitos para la hora)
-    const timestampRegex = /(\d{1,2}:\d{2}:\d{2}\.\d{3})/g;
-    const parts = raw.split(timestampRegex);
-
-    if (!this.hasLoggedDebug && parts.length > 0) {
-      console.log('--- DEBUG START ---');
-      console.log('Raw Stream Start (first 200 chars):', raw.substring(0, 200));
-      console.log('Split parts count:', parts.length);
-    }
-
-    // Procesar cada bloque timestamp + JSON
-    for (let i = 1; i < parts.length; i += 2) {
-      if (i + 1 >= parts.length) break;
-
-      const jsonPart = parts[i + 1].trim();
-      if (!jsonPart.startsWith('{')) continue;
-
-      try {
-        // Intentar parsear el JSON completo
-        const data = JSON.parse(jsonPart);
-
-        if (!this.hasLoggedDebug && data.Lines) {
-          // Buscar si hay alguien con Position 1 o Line 1
-          const leader = Object.values(data.Lines).find((d: any) => d.Position === '1' || d.Line === 1);
-          if (leader) {
-            console.log('Found potential leader in stream:', leader);
-          }
-        }
-
-        if (data.Lines) {
-          // Cada entrada en "Lines" es una actualización de un piloto
-          Object.keys(data.Lines).forEach(key => {
-            const driverData = data.Lines[key];
-            // Mapeamos los campos del JSON de F1 al modelo DriverTiming
-            const mappedUpdate = this.mapF1DataToDriverTiming(key, driverData);
-            if (mappedUpdate) {
-              updates.push(mappedUpdate);
-            }
-          });
-        }
-      } catch (e) {
-        // Si un bloque está corrupto, intentar extraer el JSON manualmente
-        const jsonMatch = jsonPart.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          try {
-            const data = JSON.parse(jsonMatch[0]);
-            if (data.Lines) {
-              Object.keys(data.Lines).forEach(key => {
-                const driverData = data.Lines[key];
-                const mappedUpdate = this.mapF1DataToDriverTiming(key, driverData);
-                if (mappedUpdate) {
-                  updates.push(mappedUpdate);
-                }
-              });
-            }
-          } catch (e2) {
-            console.warn('Bloque JSON ignorado:', e2);
-          }
-        }
-      }
-    }
-
-    if (!this.hasLoggedDebug && parts.length > 0) {
-      this.hasLoggedDebug = true;
-      console.log('--- DEBUG END ---');
-    }
-
-    return updates;
-  }
-
-  /**
-   * Mapea los datos del JSON de F1 al modelo DriverTiming
-   * Estructura real: LastLapTime.Value, IntervalToPositionAhead.Value, etc.
-   */
-  private mapF1DataToDriverTiming(racingNumber: string, f1Data: any): Partial<DriverTiming> | undefined {
+    const hub = encodeURIComponent(JSON.stringify([{ name: this.SIGNALR_HUB }]));
+    
     try {
-      // Extraer valores de objetos anidados
-      const lastLapTime = f1Data.LastLapTime?.Value ||
-        (typeof f1Data.LastLapTime === 'string' ? f1Data.LastLapTime : '');
+      // Usar el proxy configurado en Angular
+      const negotiation = await fetch(
+        `/f1-api/signalr/negotiate?connectionData=${hub}&clientProtocol=1.5`
+      );
 
-      // Mapeo de Gaps: F1 usa TimeDiffToPositionAhead y TimeDiffToFastest en el stream
-      const gapToAhead = f1Data.TimeDiffToPositionAhead || f1Data.IntervalToPositionAhead?.Value ||
-        (typeof f1Data.IntervalToPositionAhead === 'string' ? f1Data.IntervalToPositionAhead : '');
+      const cookie = negotiation.headers.get('Set-Cookie') ?? negotiation.headers.get('set-cookie');
+      const data = await negotiation.json();
+      const connectionToken = data.ConnectionToken;
 
-      const gapToLeader = f1Data.TimeDiffToFastest || f1Data.GapToLeader || '';
+      if (connectionToken) {
+        console.log('[F1 Stream] HTTP negotiation complete');
+        this.setupWebSocket(connectionToken, hub);
+      } else {
+        console.log('[F1 Stream] HTTP negotiation failed. Is there a live session?');
+        this.scheduleReconnect();
+      }
+    } catch (error) {
+      console.error('[F1 Stream] Negotiation error:', error);
+      this.scheduleReconnect();
+    }
+  }
 
-      // Intentar obtener info estática del piloto
-      const driverInfo = this.driverInfoMap.get(racingNumber);
+  private setupWebSocket(connectionToken: string, hub: string): void {
+    // Construir URL del WebSocket usando el proxy y protocolo actual
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host; // localhost:4200 en desarrollo
+    
+    const wsUrl = `${protocol}//${host}/f1-api/signalr/connect?clientProtocol=1.5&transport=webSockets&connectionToken=${encodeURIComponent(
+      connectionToken
+    )}&connectionData=${hub}`;
 
-      // Mapeo de campos del JSON de F1 al modelo DriverTiming
-      const update: Partial<DriverTiming> = {
-        driverCode: f1Data.Driver || f1Data.DriverCode || (driverInfo ? driverInfo.Tla : racingNumber)
+    console.log('[F1 Stream] Connecting to WebSocket:', wsUrl);
+    this.ws = new WebSocket(wsUrl);
+
+    this.ws.onopen = () => {
+      console.log('[F1 Stream] WebSocket open');
+      this.resetState();
+
+      const subscribeMessage = {
+        H: this.SIGNALR_HUB,
+        M: 'Subscribe',
+        A: [[
+          'Heartbeat',
+          'CarData.z',
+          'Position.z',
+          'ExtrapolatedClock',
+          'TimingStats',
+          'TimingAppData',
+          'WeatherData',
+          'TrackStatus',
+          'DriverList',
+          'RaceControlMessages',
+          'SessionInfo',
+          'SessionData',
+          'LapCount',
+          'TimingData',
+          'TeamRadio'
+        ]],
+        I: 1
       };
 
-      if (driverInfo) {
-        if (!update.driverName) update.driverName = driverInfo.BroadcastName;
-        if (!update.teamName) update.teamName = driverInfo.TeamName;
-        if (!update.teamColor) update.teamColor = driverInfo.TeamColour;
+      this.ws?.send(JSON.stringify(subscribeMessage));
+    };
+
+    this.ws.onmessage = (event) => {
+      this.updateState(event.data);
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('[F1 Stream] WebSocket error:', error);
+      this.ws?.close();
+    };
+
+    this.ws.onclose = () => {
+      console.log('[F1 Stream] WebSocket closed');
+      this.resetState();
+      this.scheduleReconnect();
+    };
+  }
+
+  private updateState(data: string): void {
+    try {
+      const parsed: SignalRMessage = JSON.parse(data);
+
+      if (!Object.keys(parsed).length) {
+        this.emptyMessageCount++;
+      } else {
+        this.emptyMessageCount = 0;
       }
 
-      if (f1Data.DriverName || f1Data.Name) {
-        update.driverName = f1Data.DriverName || f1Data.Name;
+      // Reset state after too many empty messages
+      if (this.emptyMessageCount > 5) {
+        this.resetState();
+        return;
       }
 
-      if (f1Data.NumberOfLaps !== undefined) {
-        update.lapNumber = f1Data.NumberOfLaps;
-      }
+      // Handle feed messages
+      if (Array.isArray(parsed.M)) {
+        for (const message of parsed.M) {
+          if (message.M === 'feed') {
+            this.messageCount++;
+            let [field, value] = message.A;
 
-      if (lastLapTime) {
-        update.lastLapTime = this.formatLapTime(lastLapTime);
-      }
+            // Decompress if needed
+            if (field === 'CarData.z' || field === 'Position.z') {
+              const [parsedField] = field.split('.');
+              field = parsedField;
+              value = this.parseCompressed(value);
+            }
 
-      if (gapToLeader) {
-        update.gapToLeader = this.formatGap(gapToLeader);
-      }
-
-      if (gapToAhead) {
-        update.gapToAhead = this.formatGap(gapToAhead);
-      }
-
-      if (f1Data.InPit !== undefined) {
-        update.isPit = f1Data.InPit === true;
-      }
-
-      const status = this.determineStatusColor(f1Data);
-      if (status !== 'normal') {
-        update.statusColor = status;
-      }
-
-      // Solo actualizar posición si viene en los datos
-      // PRIORIDAD: Position > Line
-      if (f1Data.Position) {
-        const parsedPos = parseInt(f1Data.Position, 10);
-        if (!isNaN(parsedPos)) {
-          update.position = parsedPos;
+            const currentState = this.liveState.value;
+            const newState = this.deepObjectMerge(currentState, { [field]: value });
+            this.liveState.next(newState);
+          }
         }
-      } else if (f1Data.Line !== undefined && f1Data.Line !== null) {
-        // Fix: Usar f1Data.Line en lugar de f1Data.Position que es undefined aquí
-        update.position = Number(f1Data.Line);
       }
+      // Handle initial response
+      else if (Object.keys(parsed.R ?? {}).length && parsed.I === '1') {
+        this.messageCount++;
+        
+        if (parsed.R['CarData.z']) {
+          parsed.R['CarData'] = this.parseCompressed(parsed.R['CarData.z']);
+        }
+        if (parsed.R['Position.z']) {
+          parsed.R['Position'] = this.parseCompressed(parsed.R['Position.z']);
+        }
 
-      return update;
+        const currentState = this.liveState.value;
+        const newState = this.deepObjectMerge(currentState, parsed.R);
+        this.liveState.next(newState);
+      }
     } catch (e) {
-      console.warn('Error mapeando datos del piloto:', e, f1Data);
-      return undefined;
+      console.error(`[F1 Stream] Could not update data: ${e}`);
     }
   }
 
-  /**
-   * Formatea el tiempo de vuelta
-   */
-  private formatLapTime(time: any): string {
-    if (!time && time !== 0) return '';
+  private parseCompressed(data: string): any {
+    try {
+      const buffer = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+      const inflated = pako.inflateRaw(buffer, { to: 'string' });
+      return JSON.parse(inflated);
+    } catch (e) {
+      console.error('[F1 Stream] Error decompressing data:', e);
+      return {};
+    }
+  }
 
-    // Si es un objeto, intentar extraer Value
-    if (typeof time === 'object' && time !== null) {
-      if (time.Value !== undefined && time.Value !== null) {
-        time = time.Value;
+  private deepObjectMerge(original: any = {}, modifier: any): any {
+    if (!modifier) return original;
+
+    const copy = { ...original };
+
+    for (const [key, value] of Object.entries(modifier)) {
+      const valueIsObject =
+        typeof value === 'object' && !Array.isArray(value) && value !== null;
+
+      if (valueIsObject && Object.keys(value).length) {
+        copy[key] = this.deepObjectMerge(copy[key], value);
       } else {
-        return ''; // Si no tiene Value, devolver vacío
+        copy[key] = value;
       }
     }
 
-    if (typeof time === 'string') {
-      return time;
-    }
-
-    if (typeof time === 'number') {
-      // Convertir milisegundos a formato mm:ss.SSS
-      const minutes = Math.floor(time / 60000);
-      const seconds = Math.floor((time % 60000) / 1000);
-      const milliseconds = time % 1000;
-      return `${minutes}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
-    }
-
-    return '';
+    return copy;
   }
 
-  /**
-   * Formatea el gap
-   */
-  private formatGap(gap: any): string {
-    if (!gap && gap !== 0) return '';
+  // Métodos públicos para obtener datos tipados
+  getDriversInfo(): DriverInfo[] {
+    const state = this.liveState.value;
+    if (!state.DriverList) return [];
 
-    // Si es un objeto, intentar extraer Value
-    if (typeof gap === 'object' && gap !== null) {
-      if (gap.Value !== undefined && gap.Value !== null) {
-        gap = gap.Value;
-      } else {
-        return ''; // Si no tiene Value, devolver vacío
-      }
-    }
-
-    if (typeof gap === 'string') {
-      // Si ya tiene formato, devolverlo tal cual
-      if (gap.startsWith('+') || gap === 'Gap' || gap === 'Leader' || gap === '') {
-        return gap;
-      }
-      // Si es un número como string, agregar +
-      if (!isNaN(parseFloat(gap))) {
-        return `+${gap}`;
-      }
-      return gap;
-    }
-
-    if (typeof gap === 'number') {
-      return gap === 0 ? 'Leader' : `+${gap.toFixed(3)}`;
-    }
-
-    return '';
+    return Object.values(state.DriverList).map(driver => ({
+      RacingNumber: driver.RacingNumber || '',
+      BroadcastName: driver.BroadcastName || '',
+      FullName: driver.FullName || '',
+      Tla: driver.Tla || '',
+      Line: driver.Line || 0,
+      TeamName: driver.TeamName || '',
+      TeamColour: driver.TeamColour || '',
+      FirstName: driver.FirstName || '',
+      LastName: driver.LastName || '',
+      Reference: driver.Reference || '',
+      HeadshotUrl: driver.HeadshotUrl || ''
+    }));
   }
 
-  /**
-   * Determina el color de estado basado en los datos de F1
-   */
-  private determineStatusColor(f1Data: any): 'personal-best' | 'session-best' | 'normal' | 'none' {
-    // Verificar si es la mejor vuelta personal (PersonalFastest)
-    if (f1Data.LastLapTime?.PersonalFastest === true) {
-      return 'personal-best';
-    }
-    // Verificar si es la mejor vuelta de la sesión (OverallFastest)
-    if (f1Data.LastLapTime?.OverallFastest === true) {
-      return 'session-best';
-    }
+  getDriversTiming(): DriverTiming[] {
+    const state = this.liveState.value;
+    if (!state.TimingData?.Lines || !state.DriverList) return [];
 
-    // Verificar en los sectores
-    if (f1Data.Sectors) {
-      // Sectors puede ser Array o Object (diccionario)
-      let sectorsList: any[] = [];
+    const timingLines = state.TimingData.Lines;
+    const driverList = state.DriverList;
+    const tyreData = state.TimingAppData?.Lines || {};
 
-      if (Array.isArray(f1Data.Sectors)) {
-        sectorsList = f1Data.Sectors;
-      } else if (typeof f1Data.Sectors === 'object') {
-        sectorsList = Object.values(f1Data.Sectors);
-      }
+    return Object.entries(timingLines).map(([driverNumber, timing]) => {
+      const driverInfo = driverList[driverNumber];
+      const tyreInfo = tyreData[driverNumber];
 
-      for (const sector of sectorsList) {
-        if (sector.OverallFastest === true) {
-          return 'session-best';
-        }
-        if (sector.PersonalFastest === true) {
-          return 'personal-best';
-        }
-      }
+      return {
+        position: timing.Position || timing.Line,
+        driverCode: driverInfo?.Tla || '',
+        driverName: driverInfo?.LastName || driverInfo?.BroadcastName || '',
+        lapNumber: timing.NumberOfLaps || 0,
+        lastLapTime: timing.LastLapTime?.Value || '--',
+        gapToLeader: timing.GapToLeader || (timing.Position === '1' ? '--' : ''),
+        gapToAhead: timing.IntervalToPositionAhead?.Value || 'Gap',
+        isPit: timing.InPit || timing.PitOut || false,
+        statusColor: this.getStatusColor(timing),
+        teamName: driverInfo?.TeamName,
+        teamColor: driverInfo?.TeamColour ? `#${driverInfo.TeamColour}` : undefined,
+        tyreHistory: tyreInfo?.Stints || []
+      };
+    }).sort((a, b) => {
+      const posA = this.parsePosition(a.position);
+      const posB = this.parsePosition(b.position);
+      return posA - posB;
+    });
+  }
+
+  private parsePosition(position: any): number {
+    if (typeof position === 'number') return position;
+    if (typeof position === 'string') return parseInt(position, 10) || 999;
+    return 999;
+  }
+
+  private getStatusColor(timing: any): 'personal-best' | 'session-best' | 'normal' | 'none' {
+    if (timing.LastLapTime?.OverallFastest) return 'session-best';
+    if (timing.LastLapTime?.PersonalFastest) return 'personal-best';
+    if (timing.LastLapTime?.Value) return 'normal';
+    return 'none';
+  }
+
+  getCurrentState(): LiveTimingState {
+    return this.liveState.value;
+  }
+
+  private resetState(): void {
+    this.liveState.next({});
+    this.messageCount = 0;
+    this.emptyMessageCount = 0;
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
     }
-    return 'normal';
+    this.reconnectTimeout = setTimeout(() => {
+      this.connect();
+    }, this.RETRY_FREQ);
+  }
+
+  disconnect(): void {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    this.resetState();
   }
 }

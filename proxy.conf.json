@@ -1,10 +1,12 @@
 {
-    "/f1-api": {
-      "target": "https://livetiming.formula1.com",
-      "secure": true,
-      "changeOrigin": true,
-      "pathRewrite": {
-        "^/f1-api": ""
-      }
+  "/f1-api": {
+    "target": "https://livetiming.formula1.com",
+    "secure": true,
+    "changeOrigin": true,
+    "ws": true,
+    "logLevel": "debug",
+    "pathRewrite": {
+      "^/f1-api": ""
     }
   }
+}

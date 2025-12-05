@@ -1,11 +1,10 @@
-import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+// timing-table.component.ts
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, model } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpClientModule } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
-import { Observable, switchMap } from 'rxjs';
-
-import { F1LiveTimingService } from '../services/f1-livetiming.service';
+import { Subscription } from 'rxjs';
+import { F1LiveTimingStreamService } from '../services/f1-livetiming.service';
 import { DriverTiming } from '../models/f1-livetiming.model';
 import { CircuitMapComponent } from '../components/circuit-map/circuit-map.component';
 
@@ -14,7 +13,6 @@ import { CircuitMapComponent } from '../components/circuit-map/circuit-map.compo
   standalone: true,
   imports: [
     CommonModule,
-    HttpClientModule,
     MatCardModule,
     MatTableModule,
     CircuitMapComponent
@@ -23,8 +21,8 @@ import { CircuitMapComponent } from '../components/circuit-map/circuit-map.compo
   styleUrls: ['./timing-table.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class TimingTableComponent implements OnInit {
-  public timingData$!: Observable<DriverTiming[]>;
+export class TimingTableComponent implements OnInit, OnDestroy {
+  public timingData: DriverTiming[] = [];
   public displayedColumns: string[] = [
     'position',
     'driverCode',
@@ -34,31 +32,60 @@ export class TimingTableComponent implements OnInit {
     'gapToLeader',
     'gapToAhead'
   ];
+
   public circuitKey: string | number = '';
   public year: number = 2025;
   public sessionPath: string = '';
+  public isConnected: boolean = false;
+
+  private subscription?: Subscription;
 
   constructor(
-    private f1Service: F1LiveTimingService,
+    private streamService: F1LiveTimingStreamService,
     private cdr: ChangeDetectorRef
-  ) { }
+  ) {}
 
   ngOnInit(): void {
-    this.timingData$ = this.f1Service.getLatestSessionPath().pipe(
-      switchMap(sessionInfo => {
-        console.log('Cargando datos de sesión:', sessionInfo);
-        this.circuitKey = sessionInfo.circuitKey;
-        this.year = sessionInfo.year;
-        this.sessionPath = sessionInfo.path;
-        this.cdr.markForCheck();
-        return this.f1Service.getLiveTimingData(sessionInfo.path);
-      })
-    );
+    // Conectar al stream de F1
+    this.streamService.connect();
+    this.isConnected = true;
+
+    // Suscribirse a las actualizaciones de timing
+    this.subscription = this.streamService.state$.subscribe(() => {
+      this.timingData = this.streamService.getDriversTiming();
+      
+      // Obtener información de sesión si está disponible
+      const state = this.streamService.getCurrentState();
+      if (state.SessionInfo) {
+        // Extraer información de la sesión actual si es necesaria
+        this.updateSessionInfo(state.SessionInfo);
+      }
+
+      // Marcar para detección de cambios
+      this.cdr.markForCheck();
+    });
+  }
+
+  ngOnDestroy(): void {
+    // Desconectar y limpiar
+    if (this.subscription) {
+      this.subscription.unsubscribe();
+    }
+    this.streamService.disconnect();
+    this.isConnected = false;
+  }
+
+  private updateSessionInfo(sessionInfo: any): void {
+    // Actualizar información de sesión si es necesaria
+    // Puedes extraer datos como circuito, año, etc.
+    if (sessionInfo.Meeting) {
+      this.circuitKey = sessionInfo.Meeting.Circuit?.Key || '';
+    }
   }
 
   getRowClass(driver: DriverTiming): string {
     if (driver.isPit) return 'row-pit';
-
+    
     switch (driver.statusColor) {
       case 'session-best':
         return 'row-session-best';
@@ -67,5 +94,15 @@ export class TimingTableComponent implements OnInit {
       default:
         return '';
     }
+  }
+
+  getTyreClass(compound: string): string {
+    const compoundLower = compound.toLowerCase();
+    return `tyre-${compoundLower}`;
+  }
+
+  // Método auxiliar para mostrar el estado de conexión
+  getConnectionStatus(): string {
+    return this.isConnected ? 'Conectado' : 'Desconectado';
   }
 }

@@ -160,3 +160,41 @@
   font-size: 0.8em;
   color: #666;
 }
+// Agregar al final de timing-table.component.scss
+
+.no-data {
+  padding: 40px;
+  text-align: center;
+  color: #666;
+  
+  p {
+    margin: 10px 0;
+    
+    &.small {
+      font-size: 0.9em;
+      color: #999;
+    }
+  }
+}
+
+mat-card-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  
+  span {
+    font-size: 0.9em;
+    color: #4caf50;
+  }
+}
+
+// Estilos para tiempos destacados en la columna TIME
+.session-best {
+  color: #9c27b0;
+  font-weight: bold;
+}
+
+.personal-best {
+  color: #4caf50;
+  font-weight: bold;
+}

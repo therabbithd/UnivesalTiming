@@ -1,75 +1,102 @@
-<mat-card>
+<!-- timing-table.component.html -->
+<mat-card class="timing-table">
   <mat-card-header>
-    <mat-card-title>🏎️ Live Timing Tower</mat-card-title>
-    <mat-card-subtitle>Datos actualizados cada 1 segundo (Simulación)</mat-card-subtitle>
+    <mat-card-title>🏁 Live Timing</mat-card-title>
+    <mat-card-subtitle>
+      Estado: {{ getConnectionStatus() }}
+      <span *ngIf="timingData.length > 0"> - {{ timingData.length }} pilotos</span>
+    </mat-card-subtitle>
   </mat-card-header>
 
-  <app-circuit-map [circuitKey]="circuitKey" [year]="year" [sessionPath]="sessionPath">
-  </app-circuit-map>
+  <mat-card-content>
+    <!-- Mapa del circuito (si está disponible) -->
+    <app-circuit-map 
+      *ngIf="circuitKey" 
+      [circuitKey]="circuitKey" 
+      [year]="year">
+    </app-circuit-map>
 
-  <table mat-table [dataSource]="(timingData$ | async) ?? []" class="timing-table mat-elevation-z8">
+    <!-- Tabla de timing -->
+    <table mat-table [dataSource]="timingData" class="mat-elevation-z8">
+      
+      <!-- Columna de Posición -->
+      <ng-container matColumnDef="position">
+        <th mat-header-cell *matHeaderCellDef>POS</th>
+        <td mat-cell *matCellDef="let driver">{{ driver.position }}</td>
+      </ng-container>
 
-    <!-- Position Column -->
-    <ng-container matColumnDef="position">
-      <th mat-header-cell *matHeaderCellDef>POS</th>
-      <td mat-cell *matCellDef="let driver">{{ driver.position }}</td>
-    </ng-container>
-
-    <!-- Driver Column -->
-    <ng-container matColumnDef="driverCode">
-      <th mat-header-cell *matHeaderCellDef>DRIVER</th>
-      <td mat-cell *matCellDef="let driver">
-        <div class="driver-info" [style.border-left-color]="'#' + driver.teamColor">
-          <span class="driver-code">{{ driver.driverCode }}</span>
-          <span class="driver-name">{{ driver.driverName }}</span>
-        </div>
-      </td>
-    </ng-container>
-
-    <!-- Tyre History Column -->
-    <ng-container matColumnDef="tyre">
-      <th mat-header-cell *matHeaderCellDef>TYRE HISTORY</th>
-      <td mat-cell *matCellDef="let driver">
-        <div class="tyre-history-container">
-          <div class="tyre-info" *ngFor="let stint of driver.tyreHistory">
-            <span class="tyre-badge" [ngClass]="'tyre-' + stint.Compound.toLowerCase()">
-              {{ stint.Compound.charAt(0) }}
-            </span>
-            <span class="tyre-laps" *ngIf="stint.TotalLaps">
-              {{ stint.TotalLaps }}L
-            </span>
+      <!-- Columna de Piloto -->
+      <ng-container matColumnDef="driverCode">
+        <th mat-header-cell *matHeaderCellDef>DRIVER</th>
+        <td mat-cell *matCellDef="let driver">
+          <div class="driver-info" [style.border-left-color]="driver.teamColor">
+            <span class="driver-code">{{ driver.driverCode }}</span>
+            <span class="driver-name">{{ driver.driverName }}</span>
           </div>
-        </div>
-      </td>
-    </ng-container>
+        </td>
+      </ng-container>
 
-    <!-- Lap Column -->
-    <ng-container matColumnDef="lapNumber">
-      <th mat-header-cell *matHeaderCellDef>LAP</th>
-      <td mat-cell *matCellDef="let driver">{{ driver.lapNumber }}</td>
-    </ng-container>
+      <!-- Columna de Historial de Neumáticos -->
+      <ng-container matColumnDef="tyre">
+        <th mat-header-cell *matHeaderCellDef>TYRE HISTORY</th>
+        <td mat-cell *matCellDef="let driver">
+          <div class="tyre-history-container">
+            <div *ngFor="let stint of driver.tyreHistory" class="tyre-info">
+              <div 
+                class="tyre-badge" 
+                [ngClass]="getTyreClass(stint.Compound)">
+                {{ stint.Compound.charAt(0) }}
+              </div>
+              <span class="tyre-laps">{{ stint.TotalLaps }}L</span>
+            </div>
+          </div>
+        </td>
+      </ng-container>
 
-    <!-- Time Column -->
-    <ng-container matColumnDef="lastLapTime">
-      <th mat-header-cell *matHeaderCellDef>TIME</th>
-      <td mat-cell *matCellDef="let driver">
-        <strong>{{ driver.lastLapTime }}</strong>
-      </td>
-    </ng-container>
+      <!-- Columna de Vuelta Actual -->
+      <ng-container matColumnDef="lapNumber">
+        <th mat-header-cell *matHeaderCellDef>LAP</th>
+        <td mat-cell *matCellDef="let driver">{{ driver.lapNumber }}</td>
+      </ng-container>
 
-    <!-- Gap Leader Column -->
-    <ng-container matColumnDef="gapToLeader">
-      <th mat-header-cell *matHeaderCellDef>GAP LDR</th>
-      <td mat-cell *matCellDef="let driver">{{ driver.gapToLeader }}</td>
-    </ng-container>
+      <!-- Columna de Tiempo de Última Vuelta -->
+      <ng-container matColumnDef="lastLapTime">
+        <th mat-header-cell *matHeaderCellDef>TIME</th>
+        <td mat-cell *matCellDef="let driver">
+          <span [ngClass]="{
+            'session-best': driver.statusColor === 'session-best',
+            'personal-best': driver.statusColor === 'personal-best'
+          }">
+            {{ driver.lastLapTime }}
+          </span>
+        </td>
+      </ng-container>
 
-    <!-- Gap Ahead Column -->
-    <ng-container matColumnDef="gapToAhead">
-      <th mat-header-cell *matHeaderCellDef>GAP AHD</th>
-      <td mat-cell *matCellDef="let driver">{{ driver.gapToAhead }}</td>
-    </ng-container>
+      <!-- Columna de Gap al Líder -->
+      <ng-container matColumnDef="gapToLeader">
+        <th mat-header-cell *matHeaderCellDef>GAP LDR</th>
+        <td mat-cell *matCellDef="let driver">{{ driver.gapToLeader }}</td>
+      </ng-container>
 
-    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-    <tr mat-row *matRowDef="let row; columns: displayedColumns;" [ngClass]="getRowClass(row)"></tr>
-  </table>
+      <!-- Columna de Gap al Piloto de Adelante -->
+      <ng-container matColumnDef="gapToAhead">
+        <th mat-header-cell *matHeaderCellDef>GAP AHD</th>
+        <td mat-cell *matCellDef="let driver">{{ driver.gapToAhead }}</td>
+      </ng-container>
+
+      <!-- Filas -->
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr 
+        mat-row 
+        *matRowDef="let row; columns: displayedColumns;"
+        [ngClass]="getRowClass(row)">
+      </tr>
+    </table>
+
+    <!-- Mensaje cuando no hay datos -->
+    <div *ngIf="timingData.length === 0" class="no-data">
+      <p>⏳ Esperando datos en vivo...</p>
+      <p class="small">Asegúrate de que hay una sesión activa de F1</p>
+    </div>
+  </mat-card-content>
 </mat-card>

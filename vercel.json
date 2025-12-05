@@ -1,0 +1,13 @@
+{
+    "rewrites": [
+      {
+        "source": "/f1-api/:path*",
+        "destination": "https://livetiming.formula1.com/:path*"
+      },
+      {
+        "source": "/(.*)",
+        "destination": "/index.html"
+      }
+    ]
+  }
+  

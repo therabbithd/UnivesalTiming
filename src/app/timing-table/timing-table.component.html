@@ -37,21 +37,28 @@
       </ng-container>
 
       <!-- Columna de Historial de Neumáticos -->
-      <ng-container matColumnDef="tyre">
-        <th mat-header-cell *matHeaderCellDef>TYRE HISTORY</th>
-        <td mat-cell *matCellDef="let driver">
-          <div class="tyre-history-container">
-            <div *ngFor="let stint of driver.tyreHistory" class="tyre-info">
-              <div 
-                class="tyre-badge" 
-                [ngClass]="getTyreClass(stint.Compound)">
-                {{ stint.Compound.charAt(0) }}
-              </div>
-              <span class="tyre-laps">{{ stint.TotalLaps }}L</span>
-            </div>
+      <!-- timing-table.component.html -->
+<ng-container matColumnDef="tyre">
+  <th mat-header-cell *matHeaderCellDef>TYRE HISTORY</th>
+  <td mat-cell *matCellDef="let driver">
+    <div class="tyre-history-container">
+      <ng-container *ngIf="isArray(driver.tyreHistory); else noTyreData">
+        <div *ngFor="let stint of driver.tyreHistory" class="tyre-info">
+          <div 
+            class="tyre-badge" 
+            [ngClass]="getTyreClass(stint.Compound)">
+            {{ stint.Compound?.charAt(0) || '-' }}
           </div>
-        </td>
+          <span class="tyre-laps">{{ stint.TotalLaps }}L</span>
+        </div>
       </ng-container>
+      <ng-template #noTyreData>
+        <span class="no-tyre-data">-</span>
+      </ng-template>
+    </div>
+  </td>
+</ng-container>
+
 
       <!-- Columna de Vuelta Actual -->
       <ng-container matColumnDef="lapNumber">

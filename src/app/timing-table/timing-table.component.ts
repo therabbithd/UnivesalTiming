@@ -105,4 +105,10 @@ export class TimingTableComponent implements OnInit, OnDestroy {
   getConnectionStatus(): string {
     return this.isConnected ? 'Conectado' : 'Desconectado';
   }
+  // timing-table.component.ts
+
+  isArray(value: any): boolean {
+    return Array.isArray(value);
+  }
+
 }

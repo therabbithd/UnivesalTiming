@@ -1,4 +1,5 @@
 // circuit-map.component.ts
+
 import { Component, Input, OnChanges, SimpleChanges, ElementRef, ViewChild, AfterViewInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
@@ -27,8 +28,7 @@ interface DriverPosition {
 export class CircuitMapComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Input() circuitKey: number | string | undefined;
   @Input() year: number | string | undefined;
-  
-  @ViewChild('mapCanvas') mapCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('mapCanvas') mapCanvas!: ElementRef;
 
   trackData: any = null;
   isLoading = false;
@@ -44,7 +44,7 @@ export class CircuitMapComponent implements OnChanges, AfterViewInit, OnDestroy 
   location: string = '';
 
   constructor(
-    private http: HttpClient, 
+    private http: HttpClient,
     private streamService: F1LiveTimingStreamService,
     private cdr: ChangeDetectorRef
   ) {
@@ -61,7 +61,7 @@ export class CircuitMapComponent implements OnChanges, AfterViewInit, OnDestroy 
     if (this.trackData) {
       this.renderChart();
     }
-    
+
     // Suscribirse al stream para actualizaciones de posición en tiempo real
     this.subscribeToPositions();
   }
@@ -101,6 +101,7 @@ export class CircuitMapComponent implements OnChanges, AfterViewInit, OnDestroy 
         this.location = data.location || '';
         this.renderChart();
       }
+
       this.cdr.markForCheck();
     });
   }
@@ -122,7 +123,6 @@ export class CircuitMapComponent implements OnChanges, AfterViewInit, OnDestroy 
 
   extractDriverPositions(): DriverPosition[] {
     const state = this.streamService.getCurrentState();
-    
     if (!state.Position?.Position || !state.DriverList) {
       return [];
     }
@@ -134,10 +134,8 @@ export class CircuitMapComponent implements OnChanges, AfterViewInit, OnDestroy 
     // Extraer posiciones de cada piloto
     for (const [driverNumber, posData] of Object.entries(positionData)) {
       const driver = driverList[driverNumber];
-      
       if (driver && posData && typeof posData === 'object') {
         const pos = posData as any;
-        
         positions.push({
           racingNumber: driver.RacingNumber || driverNumber,
           x: pos.X || 0,
@@ -252,13 +250,14 @@ export class CircuitMapComponent implements OnChanges, AfterViewInit, OnDestroy 
       },
       options: {
         responsive: true,
-        maintainAspectRatio: false,
+        maintainAspectRatio: true, // ✅ CAMBIADO A TRUE
+        aspectRatio: 1, // ✅ RATIO 1:1 PARA MANTENER PROPORCIÓN CUADRADA
         animation: {
           duration: 0 // Sin animación inicial para mejor rendimiento
         },
         plugins: {
           legend: { display: false },
-          tooltip: { 
+          tooltip: {
             enabled: true,
             callbacks: {
               label: (context: any) => {
@@ -278,17 +277,22 @@ export class CircuitMapComponent implements OnChanges, AfterViewInit, OnDestroy 
           }
         },
         scales: {
-          x: { 
-            display: false, 
+          x: {
+            display: false,
             grid: { display: false }
           },
-          y: { 
-            display: false, 
+          y: {
+            display: false,
             grid: { display: false }
           }
         },
         layout: {
-          padding: 20
+          padding: {
+            top: 20,
+            right: 20,
+            bottom: 20,
+            left: 20
+          }
         }
       }
     });

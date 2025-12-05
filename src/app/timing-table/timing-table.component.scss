@@ -1,9 +1,26 @@
-/* src/app/timing-table/timing-table.component.css */
+/* src/app/timing-table/timing-table.component.scss */
 
+/* ===== CONTENEDOR RESPONSIVE CON SCROLL ===== */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; // Scroll suave en iOS
+  
+  @media (max-width: 768px) {
+    margin: 0 -16px; // Expandir a los bordes del card en móvil
+    padding: 0 16px;
+  }
+}
+
+/* ===== TABLA BASE ===== */
 .timing-table {
   width: 100%;
+  min-width: 600px; // Ancho mínimo para evitar compresión
   font-family: 'F1 Sans', sans-serif;
-  /* Usar una fuente temática si es posible */
+  
+  @media (max-width: 768px) {
+    min-width: 500px; // Reducir en pantallas muy pequeñas
+  }
 }
 
 /* 🎨 Estilos para destacar las vueltas rápidas */
@@ -11,33 +28,22 @@
 /* Mejor vuelta de la sesión (Morado) */
 .row-session-best {
   background-color: #5d258b50;
-  /* Base color morado con transparencia */
   animation: flash-purple 1s ease-in-out;
 }
-
-/* Mejor vuelta personal (Verde) */
-
 
 /* Piloto en el Pit Lane (Amarillo/Naranja) */
 .row-pit {
   background-color: #ffc10750;
-  /* Base color amarillo/naranja con transparencia */
 }
 
 /* --- Animaciones de Parpadeo (Flash) --- */
-
-/* Animación para la vuelta más rápida de la sesión */
 @keyframes flash-purple {
   0% {
     background-color: #5d258b;
   }
-
-  /* Color sólido al inicio */
   100% {
     background-color: transparent;
   }
-
-  /* Transparente al final */
 }
 
 /* Asegurar que la fila sin animación no tenga color base */
@@ -45,22 +51,31 @@
   transition: background-color 0.3s ease;
 }
 
-/* Ajustes de tipografía para la tabla */
+/* ===== AJUSTES RESPONSIVE PARA CELDAS ===== */
 .mat-header-cell {
   font-weight: bold;
   color: #444;
+  
+  @media (max-width: 768px) {
+    font-size: 0.75em;
+    padding: 8px 4px;
+  }
 }
 
 .mat-cell {
   font-size: 0.9em;
+  
+  @media (max-width: 768px) {
+    font-size: 0.75em;
+    padding: 8px 4px;
+  }
 }
 
-/* Estilos para la columna de piloto */
+/* ===== ESTILOS PARA LA COLUMNA DE PILOTO ===== */
 .driver-info {
   display: flex;
   align-items: center;
   border-left: 4px solid transparent;
-  /* Borde para el color de equipo */
   padding-left: 8px;
   height: 100%;
 }
@@ -69,6 +84,11 @@
   font-weight: bold;
   margin-right: 8px;
   width: 35px;
+  
+  @media (max-width: 768px) {
+    width: 30px;
+    font-size: 0.85em;
+  }
 }
 
 .driver-name {
@@ -79,8 +99,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 120px;
-  display: none;
-  /* Ocultar en pantallas pequeñas por defecto */
+  display: none; // Ocultar en pantallas pequeñas por defecto
 }
 
 /* Mostrar nombre completo en pantallas más grandes */
@@ -90,14 +109,17 @@
   }
 }
 
-/* Tyre Styles */
+/* ===== TYRE STYLES ===== */
 .tyre-history-container {
   display: flex;
   flex-direction: row;
   gap: 4px;
   align-items: center;
-  /* Permitir que se expanda para mostrar todos */
   flex-wrap: nowrap;
+  
+  @media (max-width: 768px) {
+    gap: 2px; // Reducir espacio en móvil
+  }
 }
 
 .tyre-info {
@@ -112,46 +134,46 @@
   justify-content: center;
   align-items: center;
   width: 20px;
-  /* Más pequeño para historial */
   height: 20px;
   border-radius: 50%;
   font-weight: bold;
   font-size: 0.7em;
   color: #000;
   border: 1px solid rgba(0, 0, 0, 0.1);
+  
+  @media (max-width: 768px) {
+    width: 18px;
+    height: 18px;
+    font-size: 0.65em;
+  }
 }
 
 .tyre-soft {
   background-color: #ff3b30;
-  /* Red */
   color: white;
   border-color: #ff3b30;
 }
 
 .tyre-medium {
   background-color: #ffcc00;
-  /* Yellow */
   color: black;
   border-color: #b38f00;
 }
 
 .tyre-hard {
   background-color: #f0f0f0;
-  /* White/Light Gray */
   color: black;
   border-color: #999;
 }
 
 .tyre-intermediate {
   background-color: #34c759;
-  /* Green */
   color: white;
   border-color: #34c759;
 }
 
 .tyre-wet {
   background-color: #007aff;
-  /* Blue */
   color: white;
   border-color: #007aff;
 }
@@ -159,13 +181,21 @@
 .tyre-laps {
   font-size: 0.8em;
   color: #666;
+  
+  @media (max-width: 768px) {
+    font-size: 0.7em;
+  }
 }
-// Agregar al final de timing-table.component.scss
 
+/* ===== NO DATA MESSAGE ===== */
 .no-data {
   padding: 40px;
   text-align: center;
   color: #666;
+  
+  @media (max-width: 768px) {
+    padding: 20px;
+  }
   
   p {
     margin: 10px 0;
@@ -177,6 +207,7 @@
   }
 }
 
+/* ===== CARD HEADER ===== */
 mat-card-subtitle {
   display: flex;
   align-items: center;
@@ -188,7 +219,7 @@ mat-card-subtitle {
   }
 }
 
-// Estilos para tiempos destacados en la columna TIME
+/* ===== ESTILOS PARA TIEMPOS DESTACADOS ===== */
 .session-best {
   color: #9c27b0;
   font-weight: bold;
@@ -197,4 +228,23 @@ mat-card-subtitle {
 .personal-best {
   color: #4caf50;
   font-weight: bold;
+}
+
+/* ===== AJUSTES ADICIONALES PARA MÓVIL ===== */
+@media (max-width: 480px) {
+  mat-card {
+    padding: 8px;
+  }
+  
+  mat-card-header {
+    padding: 8px;
+  }
+  
+  mat-card-content {
+    padding: 8px;
+  }
+  
+  mat-card-title {
+    font-size: 1.2em;
+  }
 }

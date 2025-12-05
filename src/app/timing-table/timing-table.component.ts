@@ -1,5 +1,6 @@
 // timing-table.component.ts
-import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, model } from '@angular/core';
+
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
@@ -53,7 +54,7 @@ export class TimingTableComponent implements OnInit, OnDestroy {
     // Suscribirse a las actualizaciones de timing
     this.subscription = this.streamService.state$.subscribe(() => {
       this.timingData = this.streamService.getDriversTiming();
-      
+
       // Obtener información de sesión si está disponible
       const state = this.streamService.getCurrentState();
       if (state.SessionInfo) {
@@ -71,6 +72,7 @@ export class TimingTableComponent implements OnInit, OnDestroy {
     if (this.subscription) {
       this.subscription.unsubscribe();
     }
+
     this.streamService.disconnect();
     this.isConnected = false;
   }
@@ -85,7 +87,6 @@ export class TimingTableComponent implements OnInit, OnDestroy {
 
   getRowClass(driver: DriverTiming): string {
     if (driver.isPit) return 'row-pit';
-    
     switch (driver.statusColor) {
       case 'session-best':
         return 'row-session-best';
@@ -105,10 +106,8 @@ export class TimingTableComponent implements OnInit, OnDestroy {
   getConnectionStatus(): string {
     return this.isConnected ? 'Conectado' : 'Desconectado';
   }
-  // timing-table.component.ts
 
   isArray(value: any): boolean {
     return Array.isArray(value);
   }
-
 }
